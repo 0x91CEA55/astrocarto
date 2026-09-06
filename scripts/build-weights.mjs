@@ -1,7 +1,20 @@
 #!/usr/bin/env node
-// Generates public/data/weights.json from an explicit base(body) x angle-emphasis(theme)
-// model, so the 120 theme/body/angle numbers stay auditable instead of hand-typed.
-// Re-run after editing BASE or ANGLE_EMPHASIS below: node scripts/build-weights.mjs
+// Generates public/data/weights.json from a sparse, hand-chosen set of
+// body-angle weights per theme (~8 entries), per ENGINE-SPEC §6.
+//
+// This replaces an earlier version that built a dense 40-entry-per-theme
+// matrix as BASE[body] x ANGLE_EMPHASIS[angle] — an outer product, which is
+// rank-1: every body's AC:DC:MC:IC ratio came out identical within a theme
+// (Moon-IC/Moon-AC == Venus-IC/Venus-AC == the same fixed ratio for every
+// body), which can't express that a body means something different on
+// different angles. It also meant every one of the 40 body-angle lines
+// contributed *something* everywhere, so a spot where several mediocre
+// lines happened to cross could outscore a spot near one genuinely strong,
+// well-dignified line — a coincidence of density, not of quality.
+//
+// Each weight below is chosen independently per body-angle pair, so ratios
+// between angles differ per body on purpose. Re-run after editing WEIGHTS:
+// node scripts/build-weights.mjs
 
 import { writeFileSync } from 'node:fs'
 
@@ -15,30 +28,47 @@ const DIGNITY_MULTIPLIER = {
   fall: 0.7,
 }
 
-// Base affinity of each body for a theme, independent of which angle it's on.
-const BASE = {
-  love: { Sun: 0.6, Moon: 1.3, Mercury: 0.5, Venus: 2.0, Mars: 0.4, Jupiter: 1.1, Saturn: -0.8, Uranus: -0.6, Neptune: 0.9, Pluto: -0.5 },
-  career: { Sun: 1.4, Moon: -0.3, Mercury: 1.0, Venus: 0.7, Mars: 1.2, Jupiter: 1.5, Saturn: 1.3, Uranus: 0.5, Neptune: -0.7, Pluto: 1.0 },
-  harmony: { Sun: 0.8, Moon: 1.5, Mercury: 0.6, Venus: 1.6, Mars: -1.0, Jupiter: 1.3, Saturn: -1.1, Uranus: -0.9, Neptune: 1.2, Pluto: -1.3 },
+// Sparse per-theme weights. Positive = benefic-for-this-theme signal on that
+// line; negative = a malefic influence on the same angle actively working
+// against the theme (ENGINE-SPEC §6: "negative weights for malefics... makes
+// a clean benefic outscore one sitting next to Pluto"). Absence = no opinion,
+// not a weak opinion — it does not contribute at all, unlike a dense matrix
+// where every line has some (even if small) say.
+const WEIGHTS = {
+  love: {
+    'Venus-DC': 2.6, // the classic line: where partnership itself forms
+    'Venus-AC': 1.6, // attractiveness, ease in your own skin
+    'Moon-DC': 1.3, // emotional intimacy with a partner
+    'Jupiter-DC': 1.1, // growth and generosity through partnership
+    'Venus-IC': 1.0, // domestic affection
+    'Saturn-DC': -1.0, // restriction, loneliness in partnership
+    'Mars-DC': -0.6, // friction and conflict with a partner
+    'Pluto-DC': -0.8, // control, obsession in partnership
+  },
+  career: {
+    'Jupiter-MC': 2.4, // the classic line: opportunity and recognition in public life
+    'Saturn-MC': 1.5, // hard-won achievement through discipline
+    'Sun-MC': 1.3, // visibility, authority
+    'Mercury-MC': 0.9, // communication- and idea-driven career
+    'Mars-MC': 0.8, // ambition, competitive drive
+    'Jupiter-AC': 0.6, // personal confidence carrying into public life
+    'Neptune-MC': -0.7, // confusion, lack of direction in public image
+    'Pluto-AC': -0.6, // a public persona that reads as controlling
+  },
+  harmony: {
+    'Moon-IC': 2.5, // the classic line: home, roots, belonging
+    'Venus-IC': 1.4, // domestic peace and beauty
+    'Jupiter-IC': 1.0, // an abundant, secure home base
+    'Moon-AC': 0.9, // an instinctively nurturing, at-ease self
+    'Sun-IC': 0.7, // identity rooted in home
+    'Saturn-IC': -1.0, // duty or isolation at home
+    'Mars-IC': -0.7, // a restless or charged home life
+    'Pluto-IC': -0.9, // controlling or obsessive home dynamics
+  },
 }
-
-// How much each theme cares about AC (self) / DC (partners) / MC (public) / IC (home).
-const ANGLE_EMPHASIS = {
-  love: { AC: 0.9, DC: 1.3, MC: 0.4, IC: 0.8 },
-  career: { AC: 0.9, DC: 0.5, MC: 1.4, IC: 0.4 },
-  harmony: { AC: 0.9, DC: 0.7, MC: 0.3, IC: 1.3 },
-}
-
-const ANGLES = ['AC', 'DC', 'MC', 'IC']
 
 const themes = {}
-for (const theme of Object.keys(BASE)) {
-  const weights = {}
-  for (const [body, base] of Object.entries(BASE[theme])) {
-    for (const angle of ANGLES) {
-      weights[`${body}-${angle}`] = Math.round(base * ANGLE_EMPHASIS[theme][angle] * 100) / 100
-    }
-  }
+for (const [theme, weights] of Object.entries(WEIGHTS)) {
   themes[theme] = weights
 }
 
