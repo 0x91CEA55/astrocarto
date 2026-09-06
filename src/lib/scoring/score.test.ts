@@ -27,7 +27,7 @@ function city(name: string, lat: number, lon: number, population: number): City 
 }
 
 function scored(name: string, lat: number, lon: number, population: number, score: number): CityScore {
-  return { city: city(name, lat, lon, population), score, bestKey: null, bestMagnitude: 0, secondKey: null, secondMagnitude: 0 }
+  return { city: city(name, lat, lon, population), score, bestKey: null, bestMagnitude: 0, secondKey: null, secondMagnitude: 0, clusterMembers: [] }
 }
 
 describe('applyRankingRules', () => {
@@ -35,6 +35,28 @@ describe('applyRankingRules', () => {
     const input = [scored('Low', 0, 0, 1000, 1), scored('High', 40, 40, 1000, 3), scored('Mid', -40, -40, 1000, 2)]
     const out = applyRankingRules(input, 10)
     expect(out.map((c) => c.city.name)).toEqual(['High', 'Mid', 'Low'])
+  })
+
+  it('discloses a suppressed candidate as a cluster member instead of just dropping it (poc/NEW-FEATURE.md §3b)', () => {
+    const input = [
+      scored('Tyumen', 57.1522, 65.5272, 400_000, 3.9),
+      scored('Tavda', 58.0455, 65.2712, 33_000, 3.7), // ~100km from Tyumen
+      scored('Ventura', 34.2746, -119.229, 110_000, 3.4),
+    ]
+    const out = applyRankingRules(input, 10)
+    const tyumen = out.find((c) => c.city.name === 'Tyumen')!
+    expect(tyumen.clusterMembers.map((c) => c.city.name)).toEqual(['Tavda'])
+    expect(out.find((c) => c.city.name === 'Ventura')!.clusterMembers).toEqual([])
+    // The suppressed member itself doesn't carry its own membership list.
+    expect(tyumen.clusterMembers[0].clusterMembers).toEqual([])
+  })
+
+  it('caps disclosed cluster members at MAX_CLUSTER_MEMBERS rather than growing unbounded', () => {
+    const winner = scored('Winner', 0, 0, 1_000_000, 10)
+    const suppressed = Array.from({ length: 15 }, (_, i) => scored(`S${i}`, 0.01 * i, 0.01 * i, 1000, 9 - i * 0.01))
+    const out = applyRankingRules([winner, ...suppressed], 10)
+    expect(out).toHaveLength(1)
+    expect(out[0].clusterMembers.length).toBeLessThanOrEqual(8)
   })
 
   it('skips a candidate within DEDUP_RADIUS_KM of an already-accepted city, even if it scores higher than something farther away', () => {

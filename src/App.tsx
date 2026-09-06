@@ -15,7 +15,7 @@ import { buildFieldCopy, describeDerivation, THEME_ACCENT_BODY, THEME_LABEL, top
 
 type Stage = 'entry' | 'resolving' | 'field'
 type SheetState =
-  | { kind: 'place'; city: City }
+  | { kind: 'place'; cityScore: CityScore }
   | { kind: 'derivation'; body: BodyName }
   | { kind: 'precision' }
   | { kind: 'scrubber' }
@@ -164,7 +164,11 @@ function App() {
 
   function handleLabelClick(id: string) {
     const found = topCitiesRef.current.find((c) => String(c.city.geonameId) === id)
-    if (found) setSheet({ kind: 'place', city: found.city })
+    if (found) setSheet({ kind: 'place', cityScore: found })
+  }
+
+  function handleClusterMemberClick(member: CityScore) {
+    setSheet({ kind: 'place', cityScore: member })
   }
 
   async function handleShare() {
@@ -257,7 +261,9 @@ function App() {
           setScrubMinutes(0)
         }}
       >
-        {sheet?.kind === 'place' && chart && <PlaceSheet key={sheet.city.geonameId} city={sheet.city} chart={chart} accentColor={accentColor} />}
+        {sheet?.kind === 'place' && chart && (
+          <PlaceSheet key={sheet.cityScore.city.geonameId} cityScore={sheet.cityScore} chart={chart} accentColor={accentColor} onSelectClusterMember={handleClusterMemberClick} />
+        )}
         {sheet?.kind === 'derivation' && derivationInfo && <DerivationSheet info={derivationInfo} />}
         {sheet?.kind === 'precision' && chart && birth && (
           <>

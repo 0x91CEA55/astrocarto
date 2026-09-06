@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react'
 import type { Chart } from '../lib/astro'
 import { ANGLES, type AngleName, BODY_NAMES, type BodyName, type LineKey } from '../lib/astro/types'
-import { distanceToLineKm } from '../lib/astro/lines'
+import { distanceToLineKm, haversineKm } from '../lib/astro/lines'
 import interpretations from '../data/interpretations.json'
-import type { City } from '../lib/gazetteer/cities'
+import { DEDUP_RADIUS_KM, type CityScore } from '../lib/scoring/score'
 import { BODY_COLOR } from '../lib/map/palette'
 import { degreeInSignLabel, signOf, type DerivationInfo } from '../lib/theme/copy'
 import { fetchWikiSummary, type WikiSummary } from '../lib/wiki/summary'
@@ -31,13 +31,16 @@ function nearLines(chart: Chart, lat: number, lon: number): NearLine[] {
 }
 
 interface PlaceSheetProps {
-  city: City
+  cityScore: CityScore
   chart: Chart
   accentColor: string
+  /** A cluster member was tapped — reopen the sheet on that city instead (poc/NEW-FEATURE.md §3b). */
+  onSelectClusterMember?: (member: CityScore) => void
 }
 
 /** PLACE — ranked/tapped place detail: nearby lines, Wikipedia editorial context. UX-SPEC §7. */
-export function PlaceSheet({ city, chart, accentColor }: PlaceSheetProps) {
+export function PlaceSheet({ cityScore, chart, accentColor, onSelectClusterMember }: PlaceSheetProps) {
+  const { city } = cityScore
   // Keyed by city.geonameId at the call site (App.tsx) so switching places
   // remounts this component and `summary` starts fresh — no manual reset here.
   // No article at all is knowable synchronously, so it's the lazy initial
@@ -119,6 +122,23 @@ export function PlaceSheet({ city, chart, accentColor }: PlaceSheetProps) {
           )
         })}
       </div>
+
+      {cityScore.clusterMembers.length > 0 && (
+        <div className="void-near">
+          <div className="void-k">ALSO NEARBY</div>
+          <p className="void-faint" style={{ marginBottom: 10 }}>
+            {city.name} is the strongest result within {DEDUP_RADIUS_KM}km — these scored close behind, on the same line(s).
+          </p>
+          {cityScore.clusterMembers.map((m) => (
+            <button type="button" className="void-cluster-member" key={m.city.geonameId} onClick={() => onSelectClusterMember?.(m)}>
+              <span className="void-nm">
+                {m.city.name}, {m.city.countryCode}
+              </span>
+              <span className="void-km">{Math.round(haversineKm(city.lat, city.lon, m.city.lat, m.city.lon))} km away</span>
+            </button>
+          ))}
+        </div>
+      )}
     </>
   )
 }

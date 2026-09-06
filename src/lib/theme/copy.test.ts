@@ -29,6 +29,7 @@ function topScore(bestKey: CityScore['bestKey'], bestMagnitude: number, secondKe
     bestMagnitude,
     secondKey,
     secondMagnitude,
+    clusterMembers: [],
   }
 }
 

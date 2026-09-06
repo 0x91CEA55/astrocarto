@@ -122,6 +122,14 @@ export interface CityScore {
   /** The runner-up contributor — a paran (UX-SPEC §8's "two lines crossing") shows up as secondMagnitude close to bestMagnitude. */
   secondKey: LineKey | null
   secondMagnitude: number
+  /**
+   * Other candidates within DEDUP_RADIUS_KM that were suppressed in favor of
+   * this one (poc/NEW-FEATURE.md §3b) — kept instead of discarded, so a
+   * caller can disclose what a single pin/label is actually standing in for.
+   * Always `[]` on a cluster member itself; population only happens on the
+   * city that survives de-dup.
+   */
+  clusterMembers: CityScore[]
 }
 
 /**
@@ -152,24 +160,37 @@ function compareCityScores(a: CityScore, b: CityScore): number {
   return b.score - a.score
 }
 
+/** How far down the sorted-by-score list to look for cluster members at all.
+ * Bounds the O(topN x N) haversine scan and keeps a cluster's disclosed
+ * members meaningful (candidates that were genuinely still in contention),
+ * not literally every small town in the gazetteer within DEDUP_RADIUS_KM. */
+const CANDIDATE_SCAN_LIMIT = 200
+
+/** Cap on how many suppressed candidates one accepted city discloses. */
+const MAX_CLUSTER_MEMBERS = 8
+
 /**
  * Sorts already-scored cities (score, with a population tiebreak on near-ties
  * — see NEAR_TIE_RATIO), then greedily takes the top N subject to spatial
  * de-duplication: a candidate within DEDUP_RADIUS_KM of an already-accepted
- * city is skipped. Without this, the list is one region repeated — five
- * towns near the same strong paran — not a tour of the globe.
+ * city is folded into that city's `clusterMembers` instead of shown on its
+ * own. Without this, the list is one region repeated — five towns near the
+ * same strong paran — not a tour of the globe.
  *
  * Separated from `rankCities` so this list-shaping logic is testable against
  * hand-built scores, without needing real astronomy to land on exact numbers.
  */
 export function applyRankingRules(scored: CityScore[], topN: number): CityScore[] {
-  const sorted = [...scored].sort(compareCityScores)
+  const sorted = [...scored].sort(compareCityScores).slice(0, CANDIDATE_SCAN_LIMIT)
 
   const accepted: CityScore[] = []
   for (const candidate of sorted) {
-    if (accepted.length >= topN) break
-    const tooClose = accepted.some((a) => haversineKm(a.city.lat, a.city.lon, candidate.city.lat, candidate.city.lon) < DEDUP_RADIUS_KM)
-    if (!tooClose) accepted.push(candidate)
+    const nearby = accepted.find((a) => haversineKm(a.city.lat, a.city.lon, candidate.city.lat, candidate.city.lon) < DEDUP_RADIUS_KM)
+    if (nearby) {
+      if (nearby.clusterMembers.length < MAX_CLUSTER_MEMBERS) nearby.clusterMembers.push(candidate)
+      continue
+    }
+    if (accepted.length < topN) accepted.push(candidate)
   }
   return accepted
 }
@@ -192,7 +213,7 @@ export function rankCities(cities: City[], theme: Theme, positions: Positions, g
       rowCache.set(latBucket, row)
     }
     const { total, bestKey, bestMagnitude, secondKey, secondMagnitude } = scoreRow(row, latBucket, city.lon, positions, weights, config.dignityMultiplier, config.sigmaKm)
-    return { city, score: total, bestKey, bestMagnitude, secondKey, secondMagnitude }
+    return { city, score: total, bestKey, bestMagnitude, secondKey, secondMagnitude, clusterMembers: [] }
   })
 
   return applyRankingRules(scored, topN)
