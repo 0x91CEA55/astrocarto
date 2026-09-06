@@ -1,0 +1,244 @@
+main {
+  max-width: 1040px;
+  margin: 0 auto;
+  padding: 24px 20px 60px;
+}
+
+header h1 {
+  margin: 0 0 4px;
+  font-size: 1.8rem;
+  letter-spacing: 0.02em;
+}
+
+.tagline {
+  margin: 0 0 24px;
+  color: #9aa3b8;
+  max-width: 60ch;
+}
+
+.birth-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background: #161923;
+  border: 1px solid #232838;
+  border-radius: 10px;
+  padding: 16px;
+  margin-bottom: 20px;
+  position: relative;
+}
+
+.field-row {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  position: relative;
+}
+
+.birth-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.85rem;
+  color: #b7bfd2;
+  flex: 1;
+  min-width: 160px;
+}
+
+.birth-form input {
+  background: #0f1117;
+  border: 1px solid #3a4152;
+  border-radius: 6px;
+  padding: 8px 10px;
+  color: #e6e9f0;
+  font-size: 0.95rem;
+}
+
+.birth-form input:focus {
+  outline: 2px solid #7fd4ff;
+  outline-offset: 1px;
+}
+
+.city-search {
+  position: relative;
+}
+
+.autocomplete {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 10;
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 4px;
+  background: #1b2030;
+  border: 1px solid #3a4152;
+  border-radius: 8px;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.autocomplete li button {
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  color: #e6e9f0;
+  padding: 8px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+
+.autocomplete li button:hover {
+  background: #232838;
+}
+
+.link-button {
+  align-self: flex-start;
+  background: none;
+  border: none;
+  color: #7fd4ff;
+  font-size: 0.85rem;
+  cursor: pointer;
+  padding: 0;
+}
+
+button.primary {
+  align-self: flex-start;
+  background: #ff5fa2;
+  color: #0f1117;
+  border: none;
+  border-radius: 6px;
+  padding: 10px 20px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.error {
+  color: #ff7a5c;
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.82rem;
+  color: #b7bfd2;
+}
+
+.map-container {
+  background: #0f1117;
+  border: 1px solid #232838;
+  border-radius: 10px;
+  overflow: hidden;
+  margin-bottom: 20px;
+}
+
+.map-container svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.sphere {
+  fill: #0b0d12;
+  stroke: #3a4152;
+  stroke-width: 1;
+}
+
+.graticule {
+  fill: none;
+  stroke: #232838;
+  stroke-width: 0.5;
+}
+
+.country {
+  fill: #1b2030;
+  stroke: #2c3242;
+  stroke-width: 0.5;
+}
+
+.theme-panel {
+  background: #161923;
+  border: 1px solid #232838;
+  border-radius: 10px;
+  padding: 16px;
+}
+
+.theme-buttons {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.theme-button {
+  background: #0f1117;
+  border: 1px solid #3a4152;
+  color: #e6e9f0;
+  border-radius: 6px;
+  padding: 8px 16px;
+  cursor: pointer;
+}
+
+.theme-button.active {
+  background: #ff5fa2;
+  border-color: #ff5fa2;
+  color: #0f1117;
+  font-weight: 600;
+}
+
+.heat-toggle {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.85rem;
+  color: #b7bfd2;
+}
+
+.city-list {
+  list-style: decimal;
+  padding-left: 20px;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.city-list-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-weight: 600;
+}
+
+.city-score {
+  color: #7fd4ff;
+  font-variant-numeric: tabular-nums;
+}
+
+.city-interpretation {
+  margin: 4px 0 0;
+  color: #b7bfd2;
+  font-size: 0.88rem;
+}
+
+footer {
+  margin-top: 32px;
+  color: #6b7385;
+  font-size: 0.8rem;
+}
+
+footer a {
+  color: #7fd4ff;
+}
