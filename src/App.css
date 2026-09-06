@@ -513,13 +513,20 @@ button {
   color: var(--ink-faint);
   margin-bottom: 9px;
 }
+.void-nr-block {
+  padding: 4px 0;
+}
 .void-nr {
   display: flex;
   align-items: baseline;
   gap: 10px;
   font-family: var(--data);
   font-size: 12.5px;
-  padding: 4px 0;
+}
+.void-nr-meaning {
+  font: 300 13px/1.5 var(--voice);
+  color: var(--ink-lo);
+  margin: 4px 0 2px 24px;
 }
 .void-nr i {
   width: 14px;

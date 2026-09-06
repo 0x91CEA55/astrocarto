@@ -1,10 +1,7 @@
 import type { Chart } from '../astro'
 import { signIndex } from '../astro/dignity'
 import { SIGN_NAMES, type AngleName, type BodyName, type Dignity, type LineKey } from '../astro/types'
-import interpretations from '../../data/interpretations.json'
 import type { CityScore, Theme, WeightsConfig } from '../scoring/score'
-
-const INTERPRETATIONS = interpretations as Partial<Record<LineKey, string>>
 
 export const THEME_LABEL: Record<Theme, string> = { love: 'Love', career: 'Career', harmony: 'Harmony' }
 
@@ -62,11 +59,21 @@ export interface FieldCopy {
   leadSuffix: string
 }
 
-function dignityPhrase(body: BodyName, dignity: Dignity, sign: string): string {
-  if (dignity === 'exalted') return `${body} is exalted in ${sign}`
-  if (dignity === 'domicile') return `${body} is at home in ${sign}`
-  return `${body} is in ${sign}`
+/**
+ * Retrograde is folded into the same clause rather than bolted on as a
+ * separate sentence — "Jupiter is retrograde in Leo," not "Jupiter is in
+ * Leo. Also, retrograde." A strong dignity (exalted/domicile) still leads;
+ * retrograde becomes a caveat on it rather than overriding it.
+ */
+function dignityPhrase(body: BodyName, dignity: Dignity, sign: string, retrograde: boolean): string {
+  if (dignity === 'exalted') return retrograde ? `${body} is exalted in ${sign}, though retrograde` : `${body} is exalted in ${sign}`
+  if (dignity === 'domicile') return retrograde ? `${body} is at home in ${sign}, though retrograde` : `${body} is at home in ${sign}`
+  return retrograde ? `${body} is retrograde in ${sign}` : `${body} is in ${sign}`
 }
+
+/** One shared consequence clause for any retrograde body — chart-specific
+ * because it's driven by the real computed flag, not a per-body claim. */
+const RETROGRADE_CONSEQUENCE = ' It favours returning to something over starting cold.'
 
 /**
  * A second contributor at least this fraction of the top one's magnitude
@@ -101,21 +108,20 @@ export function buildFieldCopy(theme: Theme, chart: Chart, topScore: Pick<CitySc
   const p = chart.positions[bodyPart]
   const sign = signOf(p.eclLon)
   const angleVoice = ANGLE_VOICE[anglePart]
-  const dignityClause = dignityPhrase(bodyPart, p.dignity, sign)
-  const interp = INTERPRETATIONS[bestKey] ?? ''
+  const dignityClause = dignityPhrase(bodyPart, p.dignity, sign, p.retrograde)
 
   const isParan = !!topScore?.secondKey && topScore.secondMagnitude >= PARAN_RATIO * topScore.bestMagnitude
 
   if (isParan && topScore?.secondKey) {
     const [secondBody, secondAngle] = topScore.secondKey.split('-') as [BodyName, AngleName]
     const p2 = chart.positions[secondBody]
-    const secondClause = dignityPhrase(secondBody, p2.dignity, signOf(p2.eclLon))
+    const secondClause = dignityPhrase(secondBody, p2.dignity, signOf(p2.eclLon), p2.retrograde)
 
     return {
       headline,
       leadPrefix: `${dignityClause} on ${angleVoice}`,
       derivationBody: bodyPart,
-      leadSuffix: `, and ${secondClause} on ${ANGLE_VOICE[secondAngle]} — two lines cross here, not one. ${interp}`,
+      leadSuffix: `, and ${secondClause} on ${ANGLE_VOICE[secondAngle]} — two lines cross here, not one.`,
     }
   }
 
@@ -123,7 +129,7 @@ export function buildFieldCopy(theme: Theme, chart: Chart, topScore: Pick<CitySc
     headline,
     leadPrefix: dignityClause,
     derivationBody: bodyPart,
-    leadSuffix: ` and sits on ${angleVoice} here. ${interp}`,
+    leadSuffix: ` and sits on ${angleVoice} here.${p.retrograde ? RETROGRADE_CONSEQUENCE : ''}`,
   }
 }
 

@@ -1,11 +1,14 @@
 import { useEffect, useState } from 'react'
 import type { Chart } from '../lib/astro'
-import { ANGLES, type AngleName, BODY_NAMES, type BodyName } from '../lib/astro/types'
+import { ANGLES, type AngleName, BODY_NAMES, type BodyName, type LineKey } from '../lib/astro/types'
 import { distanceToLineKm } from '../lib/astro/lines'
+import interpretations from '../data/interpretations.json'
 import type { City } from '../lib/gazetteer/cities'
 import { BODY_COLOR } from '../lib/map/palette'
 import { degreeInSignLabel, signOf, type DerivationInfo } from '../lib/theme/copy'
 import { fetchWikiSummary, type WikiSummary } from '../lib/wiki/summary'
+
+const INTERPRETATIONS = interpretations as Partial<Record<LineKey, string>>
 
 const NEAR_LINE_RADIUS_KM = 900
 
@@ -100,14 +103,18 @@ export function PlaceSheet({ city, chart, accentColor }: PlaceSheetProps) {
         {near.map((n) => {
           const dignity = chart.positions[n.body].dignity
           const strong = dignity === 'exalted' || dignity === 'domicile'
+          const meaning = INTERPRETATIONS[n.key as LineKey]
           return (
-            <div className="void-nr" key={n.key}>
-              <i style={{ background: BODY_COLOR[n.body] }} />
-              <span className="void-nm">
-                {n.body}-{n.angle}
-              </span>
-              {strong && <span className="void-warn">{dignity}</span>}
-              <span className="void-km">{n.km < 1 ? '<1' : Math.round(n.km)} km</span>
+            <div className="void-nr-block" key={n.key}>
+              <div className="void-nr">
+                <i style={{ background: BODY_COLOR[n.body] }} />
+                <span className="void-nm">
+                  {n.body}-{n.angle}
+                </span>
+                {strong && <span className="void-warn">{dignity}</span>}
+                <span className="void-km">{n.km < 1 ? '<1' : Math.round(n.km)} km</span>
+              </div>
+              {meaning && <p className="void-nr-meaning">{meaning}</p>}
             </div>
           )
         })}

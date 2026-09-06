@@ -79,4 +79,44 @@ describe('buildFieldCopy (paran surfacing)', () => {
     expect(copy.derivationBody).toBeNull()
     expect(copy.leadSuffix).toContain('open water')
   })
+
+  it('does not tack on generic magazine-style filler after the dignity clause', () => {
+    const copy = buildFieldCopy('love', chart, topScore('Venus-DC', 2.6, 'Moon-AC', 0.3))
+    // The old interpretations.json sentence used to appear here; it's been
+    // dropped in favor of the chart-specific clause alone (plus retrograde,
+    // covered separately below).
+    expect(copy.leadSuffix).toBe(' and sits on the descendant here.')
+  })
+})
+
+describe('buildFieldCopy (retrograde)', () => {
+  it('folds retrograde into the dignity clause for a peregrine body, matching the reference voice', () => {
+    const chart = fakeChart({ Jupiter: { ra: 0, dec: 0, eclLon: 125, retrograde: true, dignity: 'peregrine' } }) // Leo
+    const copy = buildFieldCopy('career', chart, topScore('Jupiter-MC', 2.4, null, 0))
+    expect(copy.leadPrefix).toBe('Jupiter is retrograde in Leo')
+    expect(copy.leadSuffix).toBe(' and sits on the midheaven here. It favours returning to something over starting cold.')
+  })
+
+  it('adds retrograde as a caveat, not an override, when dignity is strong', () => {
+    const chart = fakeChart({ Venus: { ra: 0, dec: 0, eclLon: 355, retrograde: true, dignity: 'exalted' } }) // Pisces
+    const copy = buildFieldCopy('love', chart, topScore('Venus-DC', 2.6, null, 0))
+    expect(copy.leadPrefix).toBe('Venus is exalted in Pisces, though retrograde')
+  })
+
+  it('says nothing extra about motion when the body is not retrograde', () => {
+    const chart = fakeChart({ Jupiter: { ra: 0, dec: 0, eclLon: 125, retrograde: false, dignity: 'peregrine' } })
+    const copy = buildFieldCopy('career', chart, topScore('Jupiter-MC', 2.4, null, 0))
+    expect(copy.leadPrefix).toBe('Jupiter is in Leo')
+    expect(copy.leadSuffix).not.toContain('returning')
+  })
+
+  it('marks retrograde per body in a paran, independently of the other body', () => {
+    const chart = fakeChart({
+      Venus: { ra: 0, dec: 0, eclLon: 355, retrograde: false, dignity: 'exalted' },
+      Moon: { ra: 0, dec: 0, eclLon: 35, retrograde: true, dignity: 'peregrine' },
+    })
+    const copy = buildFieldCopy('love', chart, topScore('Venus-DC', 2.6, 'Moon-AC', 2.0))
+    expect(copy.leadPrefix).toBe('Venus is exalted in Pisces on the descendant')
+    expect(copy.leadSuffix).toContain('Moon is retrograde in Taurus')
+  })
 })
