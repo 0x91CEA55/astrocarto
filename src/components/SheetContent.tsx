@@ -207,6 +207,25 @@ export function PrecisionSheet({ chart, placeLabel }: PrecisionSheetProps) {
           )
         })}
       </div>
+
+      {chart.aspects.length > 0 && (
+        <div className="void-near">
+          <div className="void-k">ASPECTS</div>
+          <div className="void-ro">
+            {chart.aspects.map((asp) => (
+              <div key={`${asp.a}-${asp.b}`}>
+                <span className="void-b">
+                  {asp.a}–{asp.b}
+                </span>
+                <span>
+                  {asp.type} ({asp.orbDeg.toFixed(1)}° orb)
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       <p className="void-prov">
         ORTHOGRAPHIC · IN MUNDO · WHOLE-SIGN · {placeLabel} · {chart.birth.utcIso} UT
       </p>

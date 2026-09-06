@@ -336,17 +336,25 @@ Measured, not assumed.
 
 ---
 
-## 12. Mobile — unresolved, blocking
+## 12. Mobile — resolved
 
-Two decisions before layout:
+Two decisions, settled:
 
-1. **Drag vs scroll.** The page likely must not scroll at all; sheets replace
-   scrolling. Confirm first.
-2. **Line density.** 44 lines at 380px is unreadable. Options: cap to the active
-   theme (~8 lines), thin strokes below 600px, or drop malefics from display
-   while keeping them in the score. Prefer the first.
+1. **Drag vs scroll.** No scroll, on any viewport. `body{overflow:hidden}`;
+   sheets carry all secondary content (places, derivation, precision, birth
+   edit). Verified at 380×780 via a live Playwright run — `document.documentElement.scrollHeight`
+   equals `clientHeight` in both ENTRY and FIELD.
+2. **Line density.** Capped to the active theme, not all 44 lines — the
+   option this section originally preferred. `topKeysForTheme()` (`src/lib/theme/copy.ts`)
+   takes the top 8 lines by `|weight|` from the scoring config per theme;
+   malefics stay fully in the score, just not drawn unless they rank.
 
-Test at 380×780 before anything is called done.
+Tested at 380×780 (Playwright, real browser, not a resize of a wider layout).
+That pass also caught and fixed two real bugs at this width: the bottom
+controls (precision/share) collided with the birth-summary line, and a synthetic
+drag over a label triggered native text selection alongside the globe rotation.
+See `src/App.css`'s `@media (max-width: 760px)` block and the `user-select: none`
+on `body`.
 
 ---
 

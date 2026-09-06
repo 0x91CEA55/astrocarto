@@ -16,15 +16,24 @@ const ENGINE_BODY: Record<BodyName, Astronomy.Body> = {
 }
 
 /**
- * Retrograde via the analytic ecliptic-longitude rate, not a finite difference.
- * A 0.5-day central difference is *below the ephemeris's own error bound* for
- * every outer body (e.g. Jupiter moves ~0.000244° over that window against a
- * ±1 arcmin ≈ 0.0167° bound) — it reads noise, not motion. Instead take the
- * geocentric state vector (position + velocity), rotate it into the ecliptic
- * plane, and read the sign of dλ/dt = (x·vy − y·vx) / (x² + y²) directly —
- * exact, no step size to tune.
+ * Signed ecliptic-longitude rate (degrees/day) via the analytic state vector,
+ * not a finite difference. A 0.5-day central difference is *below the
+ * ephemeris's own error bound* for every outer body (e.g. Jupiter moves
+ * ~0.000244° over that window against a ±1 arcmin ≈ 0.0167° bound) — it reads
+ * noise, not motion. Instead take the geocentric state vector (position +
+ * velocity), rotate it into the ecliptic plane, and compute
+ * dλ/dt = (x·vy − y·vx) / (x² + y²) directly — exact, no step size to tune.
+ *
+ * `HelioState`'s velocity is AU/day, so the raw (x·vy−y·vx)/(x²+y²) quotient
+ * comes out in radians/day — the 180/π factor below is not optional; dropping
+ * it still makes the *sign* correct (retrograde only ever checked the sign),
+ * which is exactly the kind of unit bug a boolean-only test would never catch.
+ * See conformance-chart.test.ts, which asserts the actual magnitude against
+ * golden-chart.json's `speedDegPerDay` — including sydney_2001's Jupiter, a
+ * near-zero station (−0.000339°/day) where a wrong sign or scale would show.
  */
-function isRetrograde(body: Astronomy.Body, date: Date): boolean {
+export function eclipticLongitudeRateDegPerDay(name: BodyName, date: Date): number {
+  const body = ENGINE_BODY[name]
   const helioBody = Astronomy.HelioState(body, date)
   const helioEarth = Astronomy.HelioState(Astronomy.Body.Earth, date)
   const geoEqj = new Astronomy.StateVector(
@@ -37,8 +46,8 @@ function isRetrograde(body: Astronomy.Body, date: Date): boolean {
     helioBody.t,
   )
   const { x, y, vx, vy } = Astronomy.RotateState(Astronomy.Rotation_EQJ_ECL(), geoEqj)
-  const eclLonRateDeg = (x * vy - y * vx) / (x * x + y * y)
-  return eclLonRateDeg < 0
+  const radPerDay = (x * vy - y * vx) / (x * x + y * y)
+  return radPerDay * (180 / Math.PI)
 }
 
 /**
@@ -60,7 +69,7 @@ export function bodyPosition(name: BodyName, date: Date): BodyPosition {
     ra: equatorial.ra * 15, // hours -> degrees
     dec: equatorial.dec,
     eclLon,
-    retrograde: isRetrograde(body, date),
+    retrograde: eclipticLongitudeRateDegPerDay(name, date) < 0,
     dignity: dignityOf(name, eclLon),
   }
 }

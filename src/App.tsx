@@ -4,6 +4,7 @@ import { BirthField } from './components/BirthField'
 import { Globe, type GlobeFocus, type GlobeLabel } from './components/Globe'
 import { DerivationSheet, PlaceSheet, PrecisionSheet } from './components/SheetContent'
 import { Sheet } from './components/Sheet'
+import { TimeScrubber } from './components/TimeScrubber'
 import { computeChart, localToUtc, type BodyName, type Chart } from './lib/astro'
 import { loadCities, type City } from './lib/gazetteer/cities'
 import { BODY_COLOR } from './lib/map/palette'
@@ -13,7 +14,13 @@ import { exportGlobeShareImage } from './lib/share/exportImage'
 import { buildFieldCopy, describeDerivation, THEME_ACCENT_BODY, THEME_LABEL, topKeysForTheme } from './lib/theme/copy'
 
 type Stage = 'entry' | 'resolving' | 'field'
-type SheetState = { kind: 'place'; city: City } | { kind: 'derivation'; body: BodyName } | { kind: 'precision' } | { kind: 'share'; dataUrl: string } | null
+type SheetState =
+  | { kind: 'place'; city: City }
+  | { kind: 'derivation'; body: BodyName }
+  | { kind: 'precision' }
+  | { kind: 'scrubber' }
+  | { kind: 'share'; dataUrl: string }
+  | null
 
 const THEMES: Theme[] = ['love', 'career', 'harmony']
 const SESSION_REVEALED_KEY = 'astrocarto:revealed'
@@ -47,10 +54,19 @@ function App() {
   const [headlineVisible, setHeadlineVisible] = useState(stage === 'field')
   const [canFlyToTop, setCanFlyToTop] = useState(stage === 'field')
   const [reopenBirth, setReopenBirth] = useState(false)
+  const [scrubMinutes, setScrubMinutes] = useState(0)
 
   const globeRef = useRef<SVGSVGElement>(null)
 
   const { chart, error } = useMemo(() => computeChartResult(birth), [birth])
+
+  const baseUtc = useMemo(() => (chart ? new Date(chart.birth.utcIso) : null), [chart])
+  const scrubbedChart = useMemo(() => {
+    if (!chart || !birth || !baseUtc || scrubMinutes === 0) return null
+    return computeChart(new Date(baseUtc.getTime() + scrubMinutes * 60_000), birth.lat, birth.lon)
+  }, [chart, birth, baseUtc, scrubMinutes])
+  const scrubberOpen = sheet?.kind === 'scrubber'
+  const activeChart = scrubberOpen ? (scrubbedChart ?? chart) : chart
 
   useEffect(() => {
     loadCities().then(setCities)
@@ -168,7 +184,7 @@ function App() {
       <div className={reopenBirth ? 'void-globe-box dimmed' : 'void-globe-box'}>
         <Globe
           ref={globeRef}
-          lines={chart?.lines ?? ({} as Chart['lines'])}
+          lines={activeChart?.lines ?? ({} as Chart['lines'])}
           visibleKeys={showLines ? themeKeys : []}
           leadKey={heatVisible ? leadKey : null}
           accentColor={accentColor}
@@ -179,6 +195,7 @@ function App() {
           onInteractionStart={() => setHasInteracted(true)}
           revealing={revealing}
           onLabelClick={handleLabelClick}
+          suspendBloom={scrubberOpen}
         />
       </div>
       <div className="void-scrim" />
@@ -233,11 +250,25 @@ function App() {
 
       {error && <p className="void-error">{error}</p>}
 
-      <Sheet open={sheet !== null} onClose={() => setSheet(null)}>
+      <Sheet
+        open={sheet !== null}
+        onClose={() => {
+          setSheet(null)
+          setScrubMinutes(0)
+        }}
+      >
         {sheet?.kind === 'place' && chart && <PlaceSheet key={sheet.city.geonameId} city={sheet.city} chart={chart} accentColor={accentColor} />}
         {sheet?.kind === 'derivation' && derivationInfo && <DerivationSheet info={derivationInfo} />}
         {sheet?.kind === 'precision' && chart && birth && (
-          <PrecisionSheet chart={chart} placeLabel={`${birth.place ?? ''} ${birth.lat.toFixed(2)}N ${birth.lon.toFixed(2)}E`.trim()} />
+          <>
+            <PrecisionSheet chart={chart} placeLabel={`${birth.place ?? ''} ${birth.lat.toFixed(2)}N ${birth.lon.toFixed(2)}E`.trim()} />
+            <button type="button" className="void-link" onClick={() => setSheet({ kind: 'scrubber' })}>
+              Not sure of the exact minute? Explore what the birth time decides →
+            </button>
+          </>
+        )}
+        {sheet?.kind === 'scrubber' && chart && birth && baseUtc && (
+          <TimeScrubber birth={birth} baseUtc={baseUtc} baseChart={chart} activeChart={activeChart ?? chart} minutes={scrubMinutes} onMinutesChange={setScrubMinutes} />
         )}
         {sheet?.kind === 'share' && (
           <>

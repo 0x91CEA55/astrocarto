@@ -1,0 +1,524 @@
+[
+ {
+  "case": "ottawa_1991",
+  "utc": "1991-02-20T03:45:00+00:00",
+  "gstDeg": 205.835414,
+  "asc": {
+   "lon": 210.255978,
+   "sign": "Scorpio",
+   "minutesToSignChange": null
+  },
+  "mc": {
+   "lon": 127.7264,
+   "sign": "Leo",
+   "wholeSignHouse": 10
+  },
+  "bodies": {
+   "Sun": {
+    "eclLon": 330.999212,
+    "sign": "Pisces",
+    "wholeSignHouse": 5,
+    "retrograde": false,
+    "speedDegPerDay": 1.008294
+   },
+   "Moon": {
+    "eclLon": 37.66688,
+    "sign": "Taurus",
+    "wholeSignHouse": 7,
+    "retrograde": false,
+    "speedDegPerDay": 13.83034
+   },
+   "Mercury": {
+    "eclLon": 323.064587,
+    "sign": "Aquarius",
+    "wholeSignHouse": 4,
+    "retrograde": false,
+    "speedDegPerDay": 1.724051
+   },
+   "Venus": {
+    "eclLon": 357.259762,
+    "sign": "Pisces",
+    "wholeSignHouse": 5,
+    "retrograde": false,
+    "speedDegPerDay": 1.235135
+   },
+   "Mars": {
+    "eclLon": 69.868039,
+    "sign": "Gemini",
+    "wholeSignHouse": 8,
+    "retrograde": false,
+    "speedDegPerDay": 0.413981
+   },
+   "Jupiter": {
+    "eclLon": 125.803439,
+    "sign": "Leo",
+    "wholeSignHouse": 10,
+    "retrograde": true,
+    "speedDegPerDay": -0.110108
+   },
+   "Saturn": {
+    "eclLon": 301.50271,
+    "sign": "Aquarius",
+    "wholeSignHouse": 4,
+    "retrograde": false,
+    "speedDegPerDay": 0.108758
+   },
+   "Uranus": {
+    "eclLon": 282.471375,
+    "sign": "Capricorn",
+    "wholeSignHouse": 3,
+    "retrograde": false,
+    "speedDegPerDay": 0.0444
+   },
+   "Neptune": {
+    "eclLon": 285.878989,
+    "sign": "Capricorn",
+    "wholeSignHouse": 3,
+    "retrograde": false,
+    "speedDegPerDay": 0.028933
+   },
+   "Pluto": {
+    "eclLon": 230.376216,
+    "sign": "Scorpio",
+    "wholeSignHouse": 1,
+    "retrograde": false,
+    "speedDegPerDay": 0.001106
+   }
+  }
+ },
+ {
+  "case": "london_1969",
+  "utc": "1969-07-20T08:15:00+00:00",
+  "gstDeg": 61.687341,
+  "asc": {
+   "lon": 159.979959,
+   "sign": "Virgo",
+   "minutesToSignChange": null
+  },
+  "mc": {
+   "lon": 63.577485,
+   "sign": "Gemini",
+   "wholeSignHouse": 10
+  },
+  "bodies": {
+   "Sun": {
+    "eclLon": 117.432111,
+    "sign": "Cancer",
+    "wholeSignHouse": 11,
+    "retrograde": false,
+    "speedDegPerDay": 0.954613
+   },
+   "Moon": {
+    "eclLon": 181.530177,
+    "sign": "Libra",
+    "wholeSignHouse": 2,
+    "retrograde": false,
+    "speedDegPerDay": 12.580076
+   },
+   "Mercury": {
+    "eclLon": 114.772032,
+    "sign": "Cancer",
+    "wholeSignHouse": 11,
+    "retrograde": false,
+    "speedDegPerDay": 2.136757
+   },
+   "Venus": {
+    "eclLon": 74.485793,
+    "sign": "Gemini",
+    "wholeSignHouse": 10,
+    "retrograde": false,
+    "speedDegPerDay": 1.099537
+   },
+   "Mars": {
+    "eclLon": 242.690882,
+    "sign": "Sagittarius",
+    "wholeSignHouse": 4,
+    "retrograde": false,
+    "speedDegPerDay": 0.161165
+   },
+   "Jupiter": {
+    "eclLon": 180.673207,
+    "sign": "Libra",
+    "wholeSignHouse": 2,
+    "retrograde": false,
+    "speedDegPerDay": 0.1452
+   },
+   "Saturn": {
+    "eclLon": 38.071304,
+    "sign": "Taurus",
+    "wholeSignHouse": 9,
+    "retrograde": false,
+    "speedDegPerDay": 0.053638
+   },
+   "Uranus": {
+    "eclLon": 180.671791,
+    "sign": "Libra",
+    "wholeSignHouse": 2,
+    "retrograde": false,
+    "speedDegPerDay": 0.036043
+   },
+   "Neptune": {
+    "eclLon": 236.027628,
+    "sign": "Scorpio",
+    "wholeSignHouse": 3,
+    "retrograde": true,
+    "speedDegPerDay": -0.009516
+   },
+   "Pluto": {
+    "eclLon": 172.995363,
+    "sign": "Virgo",
+    "wholeSignHouse": 1,
+    "retrograde": false,
+    "speedDegPerDay": 0.023657
+   }
+  }
+ },
+ {
+  "case": "sydney_2001",
+  "utc": "2001-11-02T18:02:00+00:00",
+  "gstDeg": 312.57296,
+  "asc": {
+   "lon": 200.893315,
+   "sign": "Libra",
+   "minutesToSignChange": null
+  },
+  "mc": {
+   "lon": 102.683347,
+   "sign": "Cancer",
+   "wholeSignHouse": 10
+  },
+  "bodies": {
+   "Sun": {
+    "eclLon": 220.382265,
+    "sign": "Scorpio",
+    "wholeSignHouse": 2,
+    "retrograde": false,
+    "speedDegPerDay": 1.000908
+   },
+   "Moon": {
+    "eclLon": 58.283128,
+    "sign": "Taurus",
+    "wholeSignHouse": 8,
+    "retrograde": false,
+    "speedDegPerDay": 12.96641
+   },
+   "Mercury": {
+    "eclLon": 202.680038,
+    "sign": "Libra",
+    "wholeSignHouse": 1,
+    "retrograde": false,
+    "speedDegPerDay": 1.330969
+   },
+   "Venus": {
+    "eclLon": 202.734445,
+    "sign": "Libra",
+    "wholeSignHouse": 1,
+    "retrograde": false,
+    "speedDegPerDay": 1.249285
+   },
+   "Mars": {
+    "eclLon": 304.15434,
+    "sign": "Aquarius",
+    "wholeSignHouse": 5,
+    "retrograde": false,
+    "speedDegPerDay": 0.693916
+   },
+   "Jupiter": {
+    "eclLon": 105.691609,
+    "sign": "Cancer",
+    "wholeSignHouse": 10,
+    "retrograde": true,
+    "speedDegPerDay": -0.000339
+   },
+   "Saturn": {
+    "eclLon": 73.78926,
+    "sign": "Gemini",
+    "wholeSignHouse": 9,
+    "retrograde": true,
+    "speedDegPerDay": -0.060886
+   },
+   "Uranus": {
+    "eclLon": 320.912774,
+    "sign": "Aquarius",
+    "wholeSignHouse": 5,
+    "retrograde": false,
+    "speedDegPerDay": 0.002398
+   },
+   "Neptune": {
+    "eclLon": 306.0616,
+    "sign": "Aquarius",
+    "wholeSignHouse": 5,
+    "retrograde": false,
+    "speedDegPerDay": 0.008846
+   },
+   "Pluto": {
+    "eclLon": 253.837073,
+    "sign": "Sagittarius",
+    "wholeSignHouse": 3,
+    "retrograde": false,
+    "speedDegPerDay": 0.033374
+   }
+  }
+ },
+ {
+  "case": "nyc_1954_dst",
+  "utc": "1954-06-15T18:30:00+00:00",
+  "gstDeg": 181.002196,
+  "asc": {
+   "lon": 193.476518,
+   "sign": "Libra",
+   "minutesToSignChange": null
+  },
+  "mc": {
+   "lon": 105.66467,
+   "sign": "Cancer",
+   "wholeSignHouse": 10
+  },
+  "bodies": {
+   "Sun": {
+    "eclLon": 84.099392,
+    "sign": "Gemini",
+    "wholeSignHouse": 9,
+    "retrograde": false,
+    "speedDegPerDay": 0.954686
+   },
+   "Moon": {
+    "eclLon": 255.717152,
+    "sign": "Sagittarius",
+    "wholeSignHouse": 3,
+    "retrograde": false,
+    "speedDegPerDay": 12.322201
+   },
+   "Mercury": {
+    "eclLon": 106.813964,
+    "sign": "Cancer",
+    "wholeSignHouse": 10,
+    "retrograde": false,
+    "speedDegPerDay": 0.544263
+   },
+   "Venus": {
+    "eclLon": 117.69969,
+    "sign": "Cancer",
+    "wholeSignHouse": 10,
+    "retrograde": false,
+    "speedDegPerDay": 1.18644
+   },
+   "Mars": {
+    "eclLon": 275.24486,
+    "sign": "Capricorn",
+    "wholeSignHouse": 4,
+    "retrograde": true,
+    "speedDegPerDay": -0.264053
+   },
+   "Jupiter": {
+    "eclLon": 94.985894,
+    "sign": "Cancer",
+    "wholeSignHouse": 10,
+    "retrograde": false,
+    "speedDegPerDay": 0.225361
+   },
+   "Saturn": {
+    "eclLon": 212.995678,
+    "sign": "Scorpio",
+    "wholeSignHouse": 2,
+    "retrograde": true,
+    "speedDegPerDay": -0.033153
+   },
+   "Uranus": {
+    "eclLon": 111.540562,
+    "sign": "Cancer",
+    "wholeSignHouse": 10,
+    "retrograde": false,
+    "speedDegPerDay": 0.055704
+   },
+   "Neptune": {
+    "eclLon": 203.386159,
+    "sign": "Libra",
+    "wholeSignHouse": 1,
+    "retrograde": true,
+    "speedDegPerDay": -0.010092
+   },
+   "Pluto": {
+    "eclLon": 142.94141,
+    "sign": "Leo",
+    "wholeSignHouse": 11,
+    "retrograde": false,
+    "speedDegPerDay": 0.018808
+   }
+  }
+ },
+ {
+  "case": "berlin_1945",
+  "utc": "1945-05-08T21:01:00+00:00",
+  "gstDeg": 181.569385,
+  "asc": {
+   "lon": 253.734871,
+   "sign": "Sagittarius",
+   "minutesToSignChange": null
+  },
+  "mc": {
+   "lon": 196.253558,
+   "sign": "Libra",
+   "wholeSignHouse": 11
+  },
+  "bodies": {
+   "Sun": {
+    "eclLon": 47.879,
+    "sign": "Taurus",
+    "wholeSignHouse": 6,
+    "retrograde": false,
+    "speedDegPerDay": 0.967061
+   },
+   "Moon": {
+    "eclLon": 5.932477,
+    "sign": "Aries",
+    "wholeSignHouse": 5,
+    "retrograde": false,
+    "speedDegPerDay": 14.885779
+   },
+   "Mercury": {
+    "eclLon": 22.013842,
+    "sign": "Aries",
+    "wholeSignHouse": 5,
+    "retrograde": false,
+    "speedDegPerDay": 0.827496
+   },
+   "Venus": {
+    "eclLon": 17.271222,
+    "sign": "Aries",
+    "wholeSignHouse": 5,
+    "retrograde": false,
+    "speedDegPerDay": 0.077257
+   },
+   "Mars": {
+    "eclLon": 4.625817,
+    "sign": "Aries",
+    "wholeSignHouse": 5,
+    "retrograde": false,
+    "speedDegPerDay": 0.766573
+   },
+   "Jupiter": {
+    "eclLon": 167.577696,
+    "sign": "Virgo",
+    "wholeSignHouse": 10,
+    "retrograde": true,
+    "speedDegPerDay": -0.017996
+   },
+   "Saturn": {
+    "eclLon": 97.309868,
+    "sign": "Cancer",
+    "wholeSignHouse": 8,
+    "retrograde": false,
+    "speedDegPerDay": 0.099377
+   },
+   "Uranus": {
+    "eclLon": 71.709175,
+    "sign": "Gemini",
+    "wholeSignHouse": 7,
+    "retrograde": false,
+    "speedDegPerDay": 0.05504
+   },
+   "Neptune": {
+    "eclLon": 184.002023,
+    "sign": "Libra",
+    "wholeSignHouse": 11,
+    "retrograde": true,
+    "speedDegPerDay": -0.018147
+   },
+   "Pluto": {
+    "eclLon": 127.98297,
+    "sign": "Leo",
+    "wholeSignHouse": 9,
+    "retrograde": false,
+    "speedDegPerDay": 0.008112
+   }
+  }
+ },
+ {
+  "case": "reykjavik_hi",
+  "utc": "1988-12-21T03:00:00+00:00",
+  "gstDeg": 134.904952,
+  "asc": {
+   "lon": 193.181228,
+   "sign": "Libra",
+   "minutesToSignChange": null
+  },
+  "mc": {
+   "lon": 111.242406,
+   "sign": "Cancer",
+   "wholeSignHouse": 10
+  },
+  "bodies": {
+   "Sun": {
+    "eclLon": 269.47122,
+    "sign": "Sagittarius",
+    "wholeSignHouse": 3,
+    "retrograde": false,
+    "speedDegPerDay": 1.018093
+   },
+   "Moon": {
+    "eclLon": 63.047396,
+    "sign": "Gemini",
+    "wholeSignHouse": 9,
+    "retrograde": false,
+    "speedDegPerDay": 13.808059
+   },
+   "Mercury": {
+    "eclLon": 280.472413,
+    "sign": "Capricorn",
+    "wholeSignHouse": 4,
+    "retrograde": false,
+    "speedDegPerDay": 1.580858
+   },
+   "Venus": {
+    "eclLon": 244.211986,
+    "sign": "Sagittarius",
+    "wholeSignHouse": 3,
+    "retrograde": false,
+    "speedDegPerDay": 1.247396
+   },
+   "Mars": {
+    "eclLon": 14.87883,
+    "sign": "Aries",
+    "wholeSignHouse": 7,
+    "retrograde": false,
+    "speedDegPerDay": 0.46886
+   },
+   "Jupiter": {
+    "eclLon": 57.611898,
+    "sign": "Taurus",
+    "wholeSignHouse": 8,
+    "retrograde": true,
+    "speedDegPerDay": -0.096587
+   },
+   "Saturn": {
+    "eclLon": 274.30768,
+    "sign": "Capricorn",
+    "wholeSignHouse": 4,
+    "retrograde": false,
+    "speedDegPerDay": 0.118044
+   },
+   "Uranus": {
+    "eclLon": 271.098814,
+    "sign": "Capricorn",
+    "wholeSignHouse": 4,
+    "retrograde": false,
+    "speedDegPerDay": 0.060443
+   },
+   "Neptune": {
+    "eclLon": 279.5113,
+    "sign": "Capricorn",
+    "wholeSignHouse": 4,
+    "retrograde": false,
+    "speedDegPerDay": 0.037437
+   },
+   "Pluto": {
+    "eclLon": 224.243594,
+    "sign": "Scorpio",
+    "wholeSignHouse": 2,
+    "retrograde": false,
+    "speedDegPerDay": 0.031064
+   }
+  }
+ }
+]

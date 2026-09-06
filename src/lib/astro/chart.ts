@@ -1,5 +1,7 @@
 import { signIndex } from './dignity'
-import type { Aspect, AspectType, BodyName, Positions } from './types'
+import { siderealTimeDeg } from './ephemeris'
+import { utcToJulianDay } from './time'
+import { SIGN_NAMES, type Aspect, type AspectType, type BodyName, type Positions } from './types'
 import { wrap180 } from './lines'
 
 const DEG = Math.PI / 180
@@ -83,4 +85,40 @@ export function aspectsOf(pos: Positions): Aspect[] {
     }
   }
   return out
+}
+
+/**
+ * Ascendant's sign index only — for the time-scrubber's cusp search (UX-SPEC
+ * §8), which needs the rising sign at up to a dozen neighboring minute
+ * offsets per tick and shouldn't pay for full body positions/lines each time.
+ */
+export function ascendantSignIndexAt(utc: Date, latitudeDeg: number, longitudeDeg: number): number {
+  const gstDeg = siderealTimeDeg(utc)
+  const jdUt = utcToJulianDay(utc)
+  return signIndex(chartAngles(gstDeg, longitudeDeg, latitudeDeg, jdUt).ascDeg)
+}
+
+const CUSP_SEARCH_MINUTES = 6
+
+export interface CuspWarning {
+  minutesAway: number
+  direction: 'earlier' | 'later'
+  sign: string
+}
+
+/**
+ * UX-SPEC §8: "whenever the rising sign is within 6 minutes of changing."
+ * Searches outward minute-by-minute (later side first, matching
+ * poc/reference/time-scrubber.html) from `minutes` until the rising sign
+ * differs from `ascSignIndex`, or gives up at ±6 minutes.
+ */
+export function findCuspWarning(baseUtc: Date, minutes: number, latitudeDeg: number, longitudeDeg: number, ascSignIndex: number): CuspWarning | null {
+  for (let k = 1; k <= CUSP_SEARCH_MINUTES; k++) {
+    const laterSign = ascendantSignIndexAt(new Date(baseUtc.getTime() + (minutes + k) * 60_000), latitudeDeg, longitudeDeg)
+    if (laterSign !== ascSignIndex) return { minutesAway: k, direction: 'later', sign: SIGN_NAMES[laterSign] }
+
+    const earlierSign = ascendantSignIndexAt(new Date(baseUtc.getTime() + (minutes - k) * 60_000), latitudeDeg, longitudeDeg)
+    if (earlierSign !== ascSignIndex) return { minutesAway: k, direction: 'earlier', sign: SIGN_NAMES[earlierSign] }
+  }
+  return null
 }

@@ -44,5 +44,14 @@ export { julianDayUtc, localToUtc, utcToJulianDay }
 export * from './types'
 export { wrap180, lineLongitude, distanceToLineKm, haversineKm } from './lines'
 export { bodyPosition } from './ephemeris'
-export { meanObliquityDeg, chartAngles, wholeSignHouse, aspectsOf, type ChartAngles } from './chart'
+export {
+  meanObliquityDeg,
+  chartAngles,
+  wholeSignHouse,
+  aspectsOf,
+  ascendantSignIndexAt,
+  findCuspWarning,
+  type ChartAngles,
+  type CuspWarning,
+} from './chart'
 export { signIndex, dignityOf } from './dignity'

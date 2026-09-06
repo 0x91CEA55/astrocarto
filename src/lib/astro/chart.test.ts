@@ -1,18 +1,15 @@
 import { describe, expect, it } from 'vitest'
-import { aspectsOf, chartAngles, meanObliquityDeg, wholeSignHouse } from './chart'
+import { aspectsOf, ascendantSignIndexAt, chartAngles, findCuspWarning, meanObliquityDeg, wholeSignHouse } from './chart'
 import { wrap180 } from './lines'
-import type { BodyName, Positions } from './types'
+import { SIGN_NAMES, type BodyName, type Positions } from './types'
 
-// No external oracle for ASC/MC/houses: golden.json (poc/astrocarto.py, Swiss
-// Ephemeris) carries no chart-angle fields, and pyswisseph isn't installable
-// in this sandbox (no network, no pip). ENGINE-SPEC §5 claims the closed-form
-// is verified against Swiss to sub-arcsecond precision, but that claim isn't
-// checkable here — so instead of trusting it, these tests independently
-// re-derive the defining geometric conditions (MC sits on the meridian, ASC
-// sits on the horizon) via standard ecliptic->equatorial conversion and check
-// the closed-form solution actually satisfies them. This catches a
-// transcription error (wrong sign, swapped atan2 argument) even without a
-// numeric oracle.
+// golden-chart.json (conformance-chart.test.ts) is now the external oracle
+// for ASC/MC/houses/signs against pyswisseph. These tests predate that
+// fixture's arrival and independently re-derive the defining geometric
+// conditions instead (MC sits on the meridian, ASC sits on the horizon) via
+// standard ecliptic->equatorial conversion — kept because they catch a
+// transcription error (wrong sign, swapped atan2 argument) across a whole
+// grid of latitude/GST combinations, which a six-case fixture can't.
 
 const DEG = Math.PI / 180
 const RAD = 180 / Math.PI
@@ -141,5 +138,36 @@ describe('aspectsOf', () => {
     // though both fall within their own generous-orb neighborhoods in principle.
     const pos = positionsWith({ Sun: 0, Venus: 63 })
     expect(aspectsOf(pos)[0]).toMatchObject({ type: 'sextile', orbDeg: 3 })
+  })
+})
+
+describe('findCuspWarning (time scrubber, UX-SPEC §8)', () => {
+  // ottawa_1991's real ASC (golden-chart.json) is 210.255978° — 0°16' into
+  // Scorpio, i.e. a genuine cusp chart: barely past the 210° Libra/Scorpio
+  // boundary. A real, not synthetic, "within 6 minutes of changing" case.
+  const ottawaUtc = new Date('1991-02-20T03:45:00+00:00')
+  const ottawaLat = 45.4215
+  const ottawaLon = -75.6972
+
+  it('finds the Scorpio/Libra cusp a few minutes earlier for a chart already 0°16\' into the sign', () => {
+    const ascSignIdx = ascendantSignIndexAt(ottawaUtc, ottawaLat, ottawaLon)
+    expect(SIGN_NAMES[ascSignIdx]).toBe('Scorpio')
+
+    const warning = findCuspWarning(ottawaUtc, 0, ottawaLat, ottawaLon, ascSignIdx)
+    expect(warning).not.toBeNull()
+    expect(warning?.direction).toBe('earlier')
+    expect(warning?.sign).toBe('Libra')
+    expect(warning?.minutesAway).toBeLessThanOrEqual(6)
+  })
+
+  it('reports no warning for a chart comfortably mid-sign', () => {
+    // berlin_1945's ASC (golden-chart.json) is 253.734871° — 13.7° into
+    // Sagittarius, far wider than 6 minutes of drift could cross.
+    const berlinUtc = new Date('1945-05-08T21:01:00+00:00')
+    const berlinLat = 52.52
+    const berlinLon = 13.405
+    const ascSignIdx = ascendantSignIndexAt(berlinUtc, berlinLat, berlinLon)
+    expect(SIGN_NAMES[ascSignIdx]).toBe('Sagittarius')
+    expect(findCuspWarning(berlinUtc, 0, berlinLat, berlinLon, ascSignIdx)).toBeNull()
   })
 })

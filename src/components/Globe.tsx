@@ -50,6 +50,8 @@ interface GlobeProps {
   onInteractionStart?: () => void
   revealing: boolean
   onLabelClick?: (id: string) => void
+  /** Bloom re-rasterizes every frame and stutters — suspend it while the time/latitude scrubber is open (UX-SPEC §11). */
+  suspendBloom?: boolean
   size?: number
 }
 
@@ -71,6 +73,7 @@ export const Globe = forwardRef<SVGSVGElement, GlobeProps>(function Globe(
     onInteractionStart,
     revealing,
     onLabelClick,
+    suspendBloom = false,
     size = 620,
   },
   forwardedRef,
@@ -195,7 +198,7 @@ export const Globe = forwardRef<SVGSVGElement, GlobeProps>(function Globe(
   const markerPoint = marker && isVisible(marker.lat, marker.lon, rotation) ? projection([marker.lon, marker.lat]) : null
 
   const dashBound = size * 3
-  const bloomOn = !busy && !revealing
+  const bloomOn = !busy && !revealing && !suspendBloom
   const filterAttr = bloomOn ? 'url(#bloom)' : undefined
 
   return (
