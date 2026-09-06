@@ -8,12 +8,17 @@ import { TimeScrubber } from './components/TimeScrubber'
 import { computeChart, localToUtc, type BodyName, type Chart } from './lib/astro'
 import { loadCities, type City } from './lib/gazetteer/cities'
 import { BODY_COLOR } from './lib/map/palette'
-import { loadWeights, rankCities, type CityScore, type Theme, type WeightsConfig } from './lib/scoring/score'
+import { DEDUP_RADIUS_KM, loadWeights, nearbyScored, rankCities, type CityScore, type Theme, type WeightsConfig } from './lib/scoring/score'
 import { decodeBirthFromFragment, encodeBirthToFragment, type BirthInput } from './lib/share'
 import { exportGlobeShareImage } from './lib/share/exportImage'
 import { buildFieldCopy, describeDerivation, THEME_ACCENT_BODY, THEME_LABEL, topKeysForTheme } from './lib/theme/copy'
 
-type Stage = 'entry' | 'resolving' | 'field'
+/** Scale multiplier for cluster zoom — enough for a DEDUP_RADIUS_KM circle to fill most of the frame (poc/NEW-FEATURE.md §3c). */
+const CLUSTER_ZOOM = 18
+const CLUSTER_SCATTER_LIMIT = 15
+const CLUSTER_MAX_LABELS = 10
+
+type Stage = 'entry' | 'resolving' | 'field' | 'cluster'
 type SheetState =
   | { kind: 'place'; cityScore: CityScore }
   | { kind: 'derivation'; body: BodyName }
@@ -55,6 +60,8 @@ function App() {
   const [canFlyToTop, setCanFlyToTop] = useState(stage === 'field')
   const [reopenBirth, setReopenBirth] = useState(false)
   const [scrubMinutes, setScrubMinutes] = useState(0)
+  const [clusterCenter, setClusterCenter] = useState<CityScore | null>(null)
+  const [clusterScatter, setClusterScatter] = useState<CityScore[]>([])
 
   const globeRef = useRef<HTMLCanvasElement>(null)
 
@@ -94,6 +101,10 @@ function App() {
   const labels: GlobeLabel[] = useMemo(
     () => topCities.slice(0, 4).map((c) => ({ id: String(c.city.geonameId), lat: c.city.lat, lon: c.city.lon, name: c.city.name })),
     [topCities],
+  )
+  const clusterLabels: GlobeLabel[] = useMemo(
+    () => clusterScatter.map((c) => ({ id: String(c.city.geonameId), lat: c.city.lat, lon: c.city.lon, name: c.city.name })),
+    [clusterScatter],
   )
 
   // Reveal choreography — UX-SPEC §5. Computation is ~50ms; the 3.2s gap is
@@ -142,9 +153,10 @@ function App() {
 
   const focus: GlobeFocus | null = useMemo(() => {
     if (stage === 'entry') return previewMarker ? { lat: previewMarker.lat, lon: previewMarker.lon, ms: 850 } : null
+    if (stage === 'cluster' && clusterCenter) return { lat: clusterCenter.city.lat, lon: clusterCenter.city.lon, zoom: CLUSTER_ZOOM, ms: 900, exact: true }
     if (!canFlyToTop || !topScore) return null
-    return { lat: topScore.city.lat, lon: topScore.city.lon, ms: 900 }
-  }, [stage, previewMarker, canFlyToTop, topScore])
+    return { lat: topScore.city.lat, lon: topScore.city.lon, zoom: 1, ms: 900 }
+  }, [stage, previewMarker, canFlyToTop, topScore, clusterCenter])
 
   const handlePlacePreview = useCallback((lat: number, lon: number) => {
     setPreviewMarker({ lat, lon })
@@ -162,11 +174,38 @@ function App() {
     setSheet(null)
   }
 
-  function handleLabelClick(id: string) {
-    const found = topCitiesRef.current.find((c) => String(c.city.geonameId) === id)
-    if (found) setSheet({ kind: 'place', cityScore: found })
+  function enterCluster(center: CityScore) {
+    if (!chart || !config) return
+    const scatter = nearbyScored(cities, center.city.lat, center.city.lon, DEDUP_RADIUS_KM, theme, chart.positions, chart.birth.gstDeg, config, CLUSTER_SCATTER_LIMIT)
+    setClusterCenter(center)
+    setClusterScatter(scatter)
+    setStage('cluster')
   }
 
+  function exitCluster() {
+    setStage('field')
+    setClusterCenter(null)
+    setClusterScatter([])
+  }
+
+  function handleLabelClick(id: string) {
+    if (stage === 'cluster') {
+      const found = clusterScatter.find((c) => String(c.city.geonameId) === id)
+      if (found) setSheet({ kind: 'place', cityScore: found })
+      return
+    }
+    const found = topCitiesRef.current.find((c) => String(c.city.geonameId) === id)
+    if (!found) return
+    if (found.clusterMembers.length > 0) {
+      enterCluster(found)
+    } else {
+      setSheet({ kind: 'place', cityScore: found })
+    }
+  }
+
+  // From the PLACE sheet's "ALSO NEARBY" list — stays within the sheet
+  // paradigm (detail-to-detail) rather than kicking into the full-screen
+  // zoom transition, which is reserved for tapping a globe label directly.
   function handleClusterMemberClick(member: CityScore) {
     setSheet({ kind: 'place', cityScore: member })
   }
@@ -192,7 +231,8 @@ function App() {
           visibleKeys={showLines ? themeKeys : []}
           leadKey={heatVisible ? leadKey : null}
           accentColor={accentColor}
-          labels={labelsVisible ? labels : []}
+          labels={stage === 'cluster' ? clusterLabels : labelsVisible ? labels : []}
+          maxLabels={stage === 'cluster' ? CLUSTER_MAX_LABELS : undefined}
           marker={stage === 'entry' ? previewMarker : null}
           focus={focus}
           drift={stage === 'entry' && !hasInteracted}
@@ -237,6 +277,17 @@ function App() {
                 {birth?.place ?? `${birth?.lat.toFixed(2)}, ${birth?.lon.toFixed(2)}`} · {birth?.date} · {birth?.time}
               </button>
             </div>
+          </div>
+        )}
+
+        {stage === 'cluster' && clusterCenter && (
+          <div className="void-cluster-overlay">
+            <button type="button" className="void-cluster-back" onClick={exitCluster}>
+              ← Back to results
+            </button>
+            <p className="void-cluster-caption">
+              {clusterScatter.length} places score comparably near {clusterCenter.city.name} — this is one result, not several. Tap any to explore.
+            </p>
           </div>
         )}
       </div>

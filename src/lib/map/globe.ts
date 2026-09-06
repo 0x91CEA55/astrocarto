@@ -10,13 +10,23 @@ import { geoOrthographic, type GeoProjection } from 'd3-geo'
 export const DRAG_DEG_PER_PX = 0.35
 export const PITCH_CLAMP_DEG = 80
 export const FLY_TO_MS = 900
-export const LABEL_MIN_GAP_PX = 17
+/**
+ * UX-SPEC §4 specifies 17px, sized for the reference build's plain SVG
+ * `<text>` baseline positioning. This app renders labels as padded DOM
+ * `<button>`s instead (bigger, more accessible tap targets) — measured live
+ * at ~26px tall with `transform: translateY(-50%)` centering each on its
+ * anchor, so two boxes need their centers at least 26px apart to avoid
+ * touching at all. Found via a live mobile Playwright run: at 17px, adjacent
+ * labels overlapped by ~9px and one intercepted clicks meant for the other.
+ */
+export const LABEL_MIN_GAP_PX = 28
 export const LABEL_MAX_COUNT = 4
 
-export function createGlobeProjection(size: number): GeoProjection {
+/** `zoom` is a multiplier on the base scale — 1 is the normal FIELD view, >1 is a cluster zoom-in (poc/NEW-FEATURE.md §3c). */
+export function createGlobeProjection(size: number, zoom = 1): GeoProjection {
   return geoOrthographic()
     .clipAngle(90)
-    .scale(size / 2.5)
+    .scale((size / 2.5) * zoom)
     .translate([size / 2, size / 2])
 }
 
@@ -34,11 +44,16 @@ export interface Rotation {
  * Shortest-way longitude delta to a target, plus the fly-to pitch convention:
  * target pitch = lat * 0.6, NOT lat (UX-SPEC §4 — flattens the apparent
  * pitch swing so consecutive fly-tos don't feel like a rollercoaster).
+ *
+ * `exact: true` skips that flattening and centers on the true latitude —
+ * required for a zoomed-in cluster view (poc/NEW-FEATURE.md §3c): the 0.6
+ * factor is a ~2000km error at mid-latitudes, invisible when a whole
+ * hemisphere is on screen but far outside a few-hundred-km zoomed frame.
  */
-export function flyToTarget(from: Rotation, targetLat: number, targetLon: number): { lambda: number; phi: number } {
+export function flyToTarget(from: Rotation, targetLat: number, targetLon: number, exact = false): { lambda: number; phi: number } {
   const desiredLambda = -targetLon
   const delta = ((desiredLambda - from.lambda + 540) % 360) - 180
-  return { lambda: from.lambda + delta, phi: targetLat * 0.6 }
+  return { lambda: from.lambda + delta, phi: exact ? targetLat : targetLat * 0.6 }
 }
 
 export function clampPitch(phi: number): number {

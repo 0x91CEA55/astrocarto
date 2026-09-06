@@ -1,5 +1,19 @@
 import { describe, expect, it } from 'vitest'
-import { dodgeLabels, easeCubicInOut, flyToTarget, isVisible, LABEL_MIN_GAP_PX } from './globe'
+import { createGlobeProjection, dodgeLabels, easeCubicInOut, flyToTarget, isVisible, LABEL_MIN_GAP_PX } from './globe'
+
+describe('createGlobeProjection', () => {
+  it('defaults to zoom 1', () => {
+    const a = createGlobeProjection(620)
+    const b = createGlobeProjection(620, 1)
+    expect(a.scale()).toBe(b.scale())
+  })
+
+  it('scales linearly with the zoom multiplier', () => {
+    const base = createGlobeProjection(620, 1).scale()
+    expect(createGlobeProjection(620, 4).scale()).toBeCloseTo(base * 4, 6)
+    expect(createGlobeProjection(620, 0.5).scale()).toBeCloseTo(base * 0.5, 6)
+  })
+})
 
 describe('easeCubicInOut', () => {
   it('is anchored at the endpoints and the midpoint', () => {
@@ -23,6 +37,17 @@ describe('flyToTarget', () => {
     const { lambda, phi } = flyToTarget({ lambda: 0, phi: 0 }, 45, 90)
     expect(lambda).toBeCloseTo(-90, 6)
     expect(phi).toBeCloseTo(45 * 0.6, 6) // pitch = lat * 0.6, not lat — UX-SPEC §4
+  })
+
+  it('centers on the true latitude when exact=true, skipping the 0.6 flattening', () => {
+    // Regression: found live at CLUSTER_ZOOM=18 on Kamloops (50.66N) — the
+    // normal flattened pitch (30.4) put the actual camera center ~2200km
+    // away from the target, well outside a few-hundred-km zoomed frame, so
+    // every scattered city ended up off-canvas. isVisible/dodged use the
+    // same rotation.phi as the fly-to target, so this must be exact for a
+    // zoomed-in cluster view to show anything at all.
+    const { phi } = flyToTarget({ lambda: 0, phi: 0 }, 50.66, -120.32, true)
+    expect(phi).toBeCloseTo(50.66, 6)
   })
 
   it('takes the short way across the antimeridian instead of the long way around', () => {
@@ -57,6 +82,20 @@ describe('isVisible', () => {
     const rotation = { lambda: 0, phi: 0 }
     expect(isVisible(0, 90, rotation)).toBe(true) // >= 0, limb itself counts as visible
     expect(isVisible(0, 91, rotation)).toBe(false)
+  })
+
+  it('a nearby point (a cluster member, a few hundred km away) is visible when flown to with exact:true, but not with the flattened pitch', () => {
+    const center = { lat: 50.66, lon: -120.32 } // Kamloops
+    const nearby = { lat: 49.88, lon: -119.5 } // Kelowna, ~105km away
+    const exactRotation = flyToTarget({ lambda: 0, phi: 0 }, center.lat, center.lon, true)
+    expect(isVisible(nearby.lat, nearby.lon, exactRotation)).toBe(true)
+
+    const flattenedRotation = flyToTarget({ lambda: 0, phi: 0 }, center.lat, center.lon, false)
+    // Not a claim this *must* be invisible in general — just documents why
+    // the flattened pitch is unsafe to reuse for a tight zoomed-in frame:
+    // the centered point itself is ~2200km from the true target here.
+    expect(isVisible(center.lat, center.lon, flattenedRotation)).toBe(true) // hemisphere-visible...
+    expect(flattenedRotation.phi).not.toBeCloseTo(center.lat, 0) // ...but not actually centered on it
   })
 })
 

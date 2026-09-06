@@ -51,6 +51,10 @@ export interface GlobeFocus {
   lat: number
   lon: number
   ms?: number
+  /** Target scale multiplier — 1 is the normal FIELD view, >1 zooms in (cluster view, poc/NEW-FEATURE.md §3c). Omitted means "don't change zoom." */
+  zoom?: number
+  /** Center on the true latitude instead of the flattened lat*0.6 pitch — required whenever `zoom` is meaningfully >1, see flyToTarget. */
+  exact?: boolean
 }
 
 interface GlobeProps {
@@ -70,6 +74,8 @@ interface GlobeProps {
   onLabelClick?: (id: string) => void
   /** Glow re-rasterizes every frame and stutters — suspend it while dragging/flying/scrubbing (UX-SPEC §11). */
   suspendBloom?: boolean
+  /** More labels can be shown at once in cluster view than FIELD's default 4. */
+  maxLabels?: number
   size?: number
 }
 
@@ -101,15 +107,19 @@ export const Globe = forwardRef<HTMLCanvasElement, GlobeProps>(function Globe(
     revealing,
     onLabelClick,
     suspendBloom = false,
+    maxLabels = LABEL_MAX_COUNT,
     size = 620,
   },
   forwardedRef,
 ) {
   const [rotation, setRotation] = useState<Rotation>(INITIAL_ROTATION)
+  const [zoom, setZoom] = useState(1)
   const [busy, setBusy] = useState(false)
   const [worldFeatures, setWorldFeatures] = useState<Feature<Geometry>[]>([])
   const rotationRef = useRef(rotation)
   rotationRef.current = rotation
+  const zoomRef = useRef(zoom)
+  zoomRef.current = zoom
   const dragRef = useRef<{ x: number; y: number; lambda: number; phi: number; moved: boolean; pointerId: number } | null>(null)
   const lastFocusKeyRef = useRef<string | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -121,10 +131,10 @@ export const Globe = forwardRef<HTMLCanvasElement, GlobeProps>(function Globe(
   }, [])
 
   const projection = useMemo(() => {
-    const p = createGlobeProjection(size)
+    const p = createGlobeProjection(size, zoom)
     applyRotation(p, rotation)
     return p
-  }, [size, rotation])
+  }, [size, rotation, zoom])
 
   const glowOn = !busy && !revealing && !suspendBloom
   const revealStartRef = useRef<number | null>(null)
@@ -290,18 +300,22 @@ export const Globe = forwardRef<HTMLCanvasElement, GlobeProps>(function Globe(
 
   // Fly-to — triggered whenever `focus` names a new target. 900ms cubic
   // in-out, longitude takes the short way, pitch = lat * 0.6 (UX-SPEC §4).
+  // Zoom (scale) rides the same animation when `focus.zoom` is given.
   useEffect(() => {
     if (!focus) return
     const ms = focus.ms ?? FLY_TO_MS
-    const key = `${focus.lat},${focus.lon},${ms}`
+    const targetZoom = focus.zoom ?? 1
+    const key = `${focus.lat},${focus.lon},${ms},${targetZoom},${focus.exact ?? false}`
     if (lastFocusKeyRef.current === key) return
     lastFocusKeyRef.current = key
 
     const from = rotationRef.current
-    const target = flyToTarget(from, focus.lat, focus.lon)
+    const fromZoom = zoomRef.current
+    const target = flyToTarget(from, focus.lat, focus.lon, focus.exact)
 
     if (reducedMotion()) {
       setRotation(target)
+      setZoom(targetZoom)
       onFocusSettle?.()
       return
     }
@@ -313,6 +327,7 @@ export const Globe = forwardRef<HTMLCanvasElement, GlobeProps>(function Globe(
       const k = Math.min(1, (t - start) / ms)
       const e = easeCubicInOut(k)
       setRotation({ lambda: from.lambda + (target.lambda - from.lambda) * e, phi: from.phi + (target.phi - from.phi) * e })
+      setZoom(fromZoom + (targetZoom - fromZoom) * e)
       if (k < 1) {
         raf = requestAnimationFrame(step)
       } else {
@@ -363,16 +378,19 @@ export const Globe = forwardRef<HTMLCanvasElement, GlobeProps>(function Globe(
   }, [])
 
   const dodged = useMemo(() => {
+    // On-canvas bounds check, not just hemisphere visibility — at zoom>1 the
+    // visible hemisphere is larger than the canvas, so a hemisphere-visible
+    // point can still project well outside the [0,size] viewport.
     const points = labels
       .filter((l) => isVisible(l.lat, l.lon, rotation))
       .map((l) => {
         const p = projection([l.lon, l.lat])
         return p ? { id: l.id, x: p[0], y: p[1] } : null
       })
-      .filter((p): p is { id: string; x: number; y: number } => p !== null)
-      .slice(0, LABEL_MAX_COUNT)
+      .filter((p): p is { id: string; x: number; y: number } => p !== null && p.x >= 0 && p.x <= size && p.y >= 0 && p.y <= size)
+      .slice(0, maxLabels)
     return dodgeLabels(points)
-  }, [labels, rotation, projection])
+  }, [labels, rotation, projection, maxLabels, size])
 
   const labelByIdName = useMemo(() => new Map(labels.map((l) => [l.id, l.name])), [labels])
 

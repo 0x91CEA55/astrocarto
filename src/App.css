@@ -134,6 +134,12 @@ button {
   pointer-events: auto;
   padding: 4px 6px;
   margin: 0;
+  /* A long name near the right edge (common once cluster view puts 10 on
+     screen at once) used to run straight off-viewport uncut. Still fully
+     clickable either way (verified live) — this just keeps it legible. */
+  max-width: min(45vw, 220px);
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .void-vign {
@@ -148,6 +154,7 @@ button {
   inset: 0;
   z-index: 2;
   pointer-events: none;
+  transition: opacity 0.3s;
   background: linear-gradient(
     180deg,
     var(--void-bg) 0%,
@@ -157,6 +164,12 @@ button {
     rgba(2, 3, 8, 0.92) 85%,
     var(--void-bg) 100%
   );
+}
+/* No bottom-anchored FIELD chrome to protect in cluster view — the scrim was
+   found (live) dimming legitimate scattered-city labels near the bottom
+   edge, working against the "make it immersive" goal instead of serving it. */
+.stage-cluster .void-scrim {
+  opacity: 0.35;
 }
 
 /* ── shared overlay layer ──
@@ -177,7 +190,8 @@ button {
 .void-layer #field .void-lead b,
 .void-layer .void-suggest button,
 .void-layer input,
-.void-layer .void-reopen {
+.void-layer .void-reopen,
+.void-layer .void-cluster-back {
   pointer-events: auto;
 }
 
@@ -688,4 +702,30 @@ button {
 .void-scrub-house-moved .void-b,
 .void-scrub-house-moved span {
   color: var(--ink-warn);
+}
+
+/* ── cluster zoom-and-scatter (poc/NEW-FEATURE.md §3c) ── */
+.void-cluster-overlay {
+  place-self: start center;
+  margin-top: 28px;
+  text-align: center;
+  text-shadow:
+    0 2px 40px var(--void-bg),
+    0 2px 14px var(--void-bg);
+}
+.void-cluster-back {
+  font: 300 14px/1 var(--voice);
+  color: var(--ink-mid);
+  letter-spacing: 0.02em;
+  padding: 8px 4px;
+  cursor: pointer;
+}
+.void-cluster-back:hover {
+  color: var(--ink-hi);
+}
+.void-cluster-caption {
+  margin-top: 4px;
+  font: 300 14px/1.5 var(--voice);
+  color: var(--ink-lo);
+  max-width: 46ch;
 }

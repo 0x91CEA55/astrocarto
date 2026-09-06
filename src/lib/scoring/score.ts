@@ -195,6 +195,45 @@ export function applyRankingRules(scored: CityScore[], topN: number): CityScore[
   return accepted
 }
 
+/**
+ * Every gazetteer city within `radiusKm` of a point, scored and sorted —
+ * not limited to a cluster's capped `clusterMembers` (poc/NEW-FEATURE.md
+ * §3c "conditionally capture nearby cities based on zoom state", and §2's
+ * finding that a capped list can hide a real contender). Scoring a few dozen
+ * candidates on demand is cheap — ENGINE-SPEC §11's "line recomputation is
+ * free" applies here just as it does to the raster and the time scrubber.
+ */
+export function nearbyScored(
+  cities: City[],
+  centerLat: number,
+  centerLon: number,
+  radiusKm: number,
+  theme: Theme,
+  positions: Positions,
+  gstDeg: number,
+  config: WeightsConfig,
+  limit = 20,
+): CityScore[] {
+  const weights = config.themes[theme]
+  const rowCache = new Map<number, RowEntry[]>()
+
+  const scored: CityScore[] = cities
+    .filter((city) => haversineKm(centerLat, centerLon, city.lat, city.lon) <= radiusKm)
+    .map((city) => {
+      const latBucket = Math.round(city.lat * 10) / 10
+      let row = rowCache.get(latBucket)
+      if (!row) {
+        row = precomputeRow(positions, gstDeg, latBucket)
+        rowCache.set(latBucket, row)
+      }
+      const { total, bestKey, bestMagnitude, secondKey, secondMagnitude } = scoreRow(row, latBucket, city.lon, positions, weights, config.dignityMultiplier, config.sigmaKm)
+      return { city, score: total, bestKey, bestMagnitude, secondKey, secondMagnitude, clusterMembers: [] }
+    })
+
+  scored.sort((a, b) => b.score - a.score)
+  return scored.slice(0, limit)
+}
+
 /** Ranks the gazetteer by theme score. Cities are bucketed to 0.1° latitude so
  * nearby cities share one precomputed row instead of each paying full trig cost.
  * The raster heat map (buildRaster) is untouched by ranking rules: the

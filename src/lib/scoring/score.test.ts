@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { applyRankingRules, DEDUP_RADIUS_KM, NEAR_TIE_RATIO, scorePointAttributed, type CityScore, type Theme, type WeightsConfig } from './score'
+import { applyRankingRules, DEDUP_RADIUS_KM, NEAR_TIE_RATIO, nearbyScored, scorePointAttributed, type CityScore, type Theme, type WeightsConfig } from './score'
 import { BODY_NAMES, type Positions } from '../astro/types'
 import type { City } from '../gazetteer/cities'
 
@@ -145,5 +145,39 @@ describe('scorePointAttributed (paran attribution)', () => {
     expect(result.bestKey).toBe('Venus-AC')
     expect(result.secondKey).toBeNull()
     expect(result.secondMagnitude).toBe(0)
+  })
+})
+
+describe('nearbyScored (cluster zoom, poc/NEW-FEATURE.md §3c)', () => {
+  // ra=90, dec=0 -> AC line longitude = wrap180(-gst) = 0 at gst=0, for
+  // every latitude (see the paran describe block above for why).
+  const positions = flatPositions({ Venus: { ra: 90, dec: 0, eclLon: 0, retrograde: false, dignity: 'peregrine' } })
+  const config = weightsWith('love', { 'Venus-AC': 1.0 })
+
+  it('only includes cities within radiusKm of the center point', () => {
+    const cities = [
+      city('Near', 0, 0.5, 1000), // ~55km from (0,0)
+      city('Mid', 0, 2, 1000), // ~222km
+      city('Far', 0, 10, 1000), // ~1113km
+    ]
+    const result = nearbyScored(cities, 0, 0, 300, 'love', positions, 0, config)
+    expect(result.map((r) => r.city.name).sort()).toEqual(['Mid', 'Near'])
+  })
+
+  it('sorts by score descending, independent of input order', () => {
+    const cities = [city('B', 0, 2, 1000), city('A', 0, 0.1, 1000), city('C', 0, 1, 1000)]
+    const result = nearbyScored(cities, 0, 0, 300, 'love', positions, 0, config)
+    // Closer to the line (smaller |lon|) means higher score under this synthetic config.
+    expect(result.map((r) => r.city.name)).toEqual(['A', 'C', 'B'])
+  })
+
+  it('respects the limit', () => {
+    const cities = Array.from({ length: 10 }, (_, i) => city(`C${i}`, 0, i * 0.1, 1000))
+    expect(nearbyScored(cities, 0, 0, 300, 'love', positions, 0, config, 3)).toHaveLength(3)
+  })
+
+  it('returns full attribution per city, same shape as rankCities', () => {
+    const result = nearbyScored([city('Solo', 0, 0, 1000)], 0, 0, 300, 'love', positions, 0, config)
+    expect(result[0]).toMatchObject({ bestKey: 'Venus-AC', clusterMembers: [] })
   })
 })
