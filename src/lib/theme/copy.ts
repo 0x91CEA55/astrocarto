@@ -2,7 +2,7 @@ import type { Chart } from '../astro'
 import { signIndex } from '../astro/dignity'
 import { SIGN_NAMES, type AngleName, type BodyName, type Dignity, type LineKey } from '../astro/types'
 import interpretations from '../../data/interpretations.json'
-import type { Theme, WeightsConfig } from '../scoring/score'
+import type { CityScore, Theme, WeightsConfig } from '../scoring/score'
 
 const INTERPRETATIONS = interpretations as Partial<Record<LineKey, string>>
 
@@ -62,13 +62,30 @@ export interface FieldCopy {
   leadSuffix: string
 }
 
+function dignityPhrase(body: BodyName, dignity: Dignity, sign: string): string {
+  if (dignity === 'exalted') return `${body} is exalted in ${sign}`
+  if (dignity === 'domicile') return `${body} is at home in ${sign}`
+  return `${body} is in ${sign}`
+}
+
+/**
+ * A second contributor at least this fraction of the top one's magnitude
+ * means the score isn't really about one line — it's a paran (two lines
+ * crossing). Attributing that to the single strongest line alone would be
+ * dishonest about why the place scored; the copy should say so instead.
+ */
+const PARAN_RATIO = 0.6
+
 /**
  * Headline + lead paragraph for FIELD, generated from the actual computed
  * chart's top contributor (ENGINE-SPEC §6's "largest-magnitude contributor"),
- * not hardcoded per-example copy.
+ * not hardcoded per-example copy. When the top score is a paran (a second
+ * line within PARAN_RATIO of the first), both lines are named — see
+ * scorePointAttributed / rankCities's bestMagnitude/secondKey/secondMagnitude.
  */
-export function buildFieldCopy(theme: Theme, chart: Chart, bestKey: LineKey | null): FieldCopy {
+export function buildFieldCopy(theme: Theme, chart: Chart, topScore: Pick<CityScore, 'bestKey' | 'bestMagnitude' | 'secondKey' | 'secondMagnitude'> | null): FieldCopy {
   const headline = THEME_HEADLINE[theme]
+  const bestKey = topScore?.bestKey ?? null
 
   if (!bestKey) {
     // The water case — UX-SPEC §9. No line to lead with; the sheet below carries the real content.
@@ -84,15 +101,23 @@ export function buildFieldCopy(theme: Theme, chart: Chart, bestKey: LineKey | nu
   const p = chart.positions[bodyPart]
   const sign = signOf(p.eclLon)
   const angleVoice = ANGLE_VOICE[anglePart]
-
-  const dignityClause =
-    p.dignity === 'exalted'
-      ? `${bodyPart} is exalted in ${sign}`
-      : p.dignity === 'domicile'
-        ? `${bodyPart} is at home in ${sign}`
-        : `${bodyPart} is in ${sign}`
-
+  const dignityClause = dignityPhrase(bodyPart, p.dignity, sign)
   const interp = INTERPRETATIONS[bestKey] ?? ''
+
+  const isParan = !!topScore?.secondKey && topScore.secondMagnitude >= PARAN_RATIO * topScore.bestMagnitude
+
+  if (isParan && topScore?.secondKey) {
+    const [secondBody, secondAngle] = topScore.secondKey.split('-') as [BodyName, AngleName]
+    const p2 = chart.positions[secondBody]
+    const secondClause = dignityPhrase(secondBody, p2.dignity, signOf(p2.eclLon))
+
+    return {
+      headline,
+      leadPrefix: `${dignityClause} on ${angleVoice}`,
+      derivationBody: bodyPart,
+      leadSuffix: `, and ${secondClause} on ${ANGLE_VOICE[secondAngle]} — two lines cross here, not one. ${interp}`,
+    }
+  }
 
   return {
     headline,

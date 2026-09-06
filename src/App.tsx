@@ -88,7 +88,7 @@ function App() {
   const themeKeys = useMemo(() => (config ? topKeysForTheme(config, theme) : []), [config, theme])
   const topScore = topCities[0] ?? null
   const leadKey = topScore?.bestKey ?? null
-  const fieldCopy = useMemo(() => (chart ? buildFieldCopy(theme, chart, leadKey) : null), [chart, theme, leadKey])
+  const fieldCopy = useMemo(() => (chart ? buildFieldCopy(theme, chart, topScore) : null), [chart, theme, topScore])
   const accentColor = BODY_COLOR[THEME_ACCENT_BODY[theme]]
 
   const labels: GlobeLabel[] = useMemo(

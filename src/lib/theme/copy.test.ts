@@ -1,5 +1,36 @@
 import { describe, expect, it } from 'vitest'
-import { degreeInSignLabel } from './copy'
+import type { Chart } from '../astro'
+import { BODY_NAMES, type Positions } from '../astro/types'
+import type { CityScore } from '../scoring/score'
+import { buildFieldCopy, degreeInSignLabel } from './copy'
+
+function fakeChart(overrides: Partial<Positions>): Chart {
+  const base = { ra: 0, dec: 0, eclLon: 0, retrograde: false, dignity: 'peregrine' as const }
+  const positions = {} as Positions
+  for (const name of BODY_NAMES) positions[name] = { ...base }
+  Object.assign(positions, overrides)
+  return {
+    birth: { jdUt: 0, gstDeg: 0, utcIso: '2000-01-01T00:00:00.000Z' },
+    positions,
+    lines: {} as Chart['lines'],
+    angles: { ramcDeg: 0, obliquityDeg: 23.4, mcDeg: 0, ascDeg: 0 },
+    ascSignIndex: 0,
+    housesOf: Object.fromEntries(BODY_NAMES.map((b) => [b, 1])) as Chart['housesOf'],
+    mcHouse: 1,
+    aspects: [],
+  }
+}
+
+function topScore(bestKey: CityScore['bestKey'], bestMagnitude: number, secondKey: CityScore['secondKey'], secondMagnitude: number): CityScore {
+  return {
+    city: { name: 'Test', ascii: null, lat: 0, lon: 0, countryCode: 'XX', population: 0, tz: 'UTC', geonameId: 1, wikiTitle: null },
+    score: bestMagnitude,
+    bestKey,
+    bestMagnitude,
+    secondKey,
+    secondMagnitude,
+  }
+}
 
 describe('degreeInSignLabel', () => {
   it('formats an ordinary degree/minute pair', () => {
@@ -20,5 +51,32 @@ describe('degreeInSignLabel', () => {
   it('handles a longitude already past 360 or negative, via the same modulo normalization used elsewhere', () => {
     expect(degreeInSignLabel(390)).toBe(degreeInSignLabel(30))
     expect(degreeInSignLabel(-1)).toBe(degreeInSignLabel(29))
+  })
+})
+
+describe('buildFieldCopy (paran surfacing)', () => {
+  const chart = fakeChart({
+    Venus: { ra: 0, dec: 0, eclLon: 355, retrograde: false, dignity: 'exalted' }, // Pisces
+    Moon: { ra: 0, dec: 0, eclLon: 35, retrograde: false, dignity: 'peregrine' }, // Taurus
+  })
+
+  it('attributes to a single line when there is no comparable second contributor', () => {
+    const copy = buildFieldCopy('love', chart, topScore('Venus-DC', 2.6, 'Moon-AC', 0.3))
+    expect(copy.leadPrefix).toBe('Venus is exalted in Pisces')
+    expect(copy.leadSuffix).not.toContain('two lines cross')
+    expect(copy.derivationBody).toBe('Venus')
+  })
+
+  it('names both lines when the second contributor is within PARAN_RATIO of the first', () => {
+    const copy = buildFieldCopy('love', chart, topScore('Venus-DC', 2.6, 'Moon-AC', 2.0))
+    expect(copy.leadPrefix).toBe('Venus is exalted in Pisces on the descendant')
+    expect(copy.leadSuffix).toContain('Moon is in Taurus')
+    expect(copy.leadSuffix).toContain('two lines cross here, not one')
+  })
+
+  it('still returns the water-case copy when there is no bestKey at all', () => {
+    const copy = buildFieldCopy('love', chart, null)
+    expect(copy.derivationBody).toBeNull()
+    expect(copy.leadSuffix).toContain('open water')
   })
 })
