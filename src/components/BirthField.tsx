@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { loadCities, searchCities, type City } from '../lib/gazetteer/cities'
 import { timezoneForCoords } from '../lib/geo/timezone'
+import { formatDateForDisplay, parseFreeDate, parseFreeTime } from '../lib/parseDateTime'
 import type { BirthInput } from '../lib/share'
 
 interface BirthFieldProps {
@@ -15,13 +16,19 @@ interface BirthFieldProps {
  * not a modal or a tab (UX-SPEC §6). Each field only lights up once the
  * previous one is filled, teaching that time is what locks the chart.
  *
+ * Date and time are free text, not native `<input type="date">`/`type="time">`
+ * — those force a browser/OS picker UI (typically defaulting to today, many
+ * clicks from a birth date decades back) that fights the Void aesthetic.
+ * `poc/reference/void-components.html` uses plain text with placeholders
+ * ("19 Feb 1991", "22:45") for the same reason; parsing is in `lib/parseDateTime.ts`.
+ *
  * Manual lat/lon/tz stays available as a fallback (UX-SPEC §9: "location not
  * found — manual lat/lon/tz, never a dead end"), even though the reference
  * component build doesn't show it — the spec's empty-states section requires it.
  */
 export function BirthField({ initial, onPlacePreview, onSubmit }: BirthFieldProps) {
-  const [date, setDate] = useState(initial?.date ?? '')
-  const [time, setTime] = useState(initial?.time ?? '')
+  const [dateText, setDateText] = useState(initial ? formatDateForDisplay(initial.date) : '')
+  const [timeText, setTimeText] = useState(initial?.time ?? '')
   const [query, setQuery] = useState(initial?.place ?? '')
   const [cities, setCities] = useState<City[]>([])
   const [selected, setSelected] = useState<{ lat: number; lon: number; tz: string; place: string } | null>(
@@ -32,6 +39,7 @@ export function BirthField({ initial, onPlacePreview, onSubmit }: BirthFieldProp
   const [manualLon, setManualLon] = useState(initial ? String(initial.lon) : '')
   const [manualTz, setManualTz] = useState(initial?.tz ?? '')
   const [tzEditedByUser, setTzEditedByUser] = useState(false)
+  const [suggestedTz, setSuggestedTz] = useState<string | null>(null)
 
   useEffect(() => {
     loadCities().then(setCities)
@@ -39,15 +47,27 @@ export function BirthField({ initial, onPlacePreview, onSubmit }: BirthFieldProp
 
   const results = useMemo(() => (manual || !query || selected ? [] : searchCities(cities, query)), [cities, query, manual, selected])
 
-  // Derived purely from coordinates, never written into state on blur — a
-  // per-field blur handler used to fire while the other field was still
-  // empty (Tab from lat -> lon read lon as 0 mid-edit) and silently lock in
-  // a wrong zone. See git history for the incident this replaced.
-  const suggestedTz = useMemo(() => {
+  const parsedDate = useMemo(() => parseFreeDate(dateText), [dateText])
+  const parsedTime = useMemo(() => parseFreeTime(timeText), [timeText])
+
+  // Derived purely from coordinates, resolved async (tz-lookup is lazy-loaded
+  // — UX-SPEC §11) and never written into state on blur — a per-field blur
+  // handler used to fire while the other field was still empty (Tab from lat
+  // -> lon read lon as 0 mid-edit) and silently lock in a wrong zone.
+  useEffect(() => {
     const lat = Number(manualLat)
     const lon = Number(manualLon)
-    if (manualLat.trim() === '' || manualLon.trim() === '' || !Number.isFinite(lat) || !Number.isFinite(lon)) return null
-    return timezoneForCoords(lat, lon)
+    if (manualLat.trim() === '' || manualLon.trim() === '' || !Number.isFinite(lat) || !Number.isFinite(lon)) {
+      setSuggestedTz(null)
+      return
+    }
+    let cancelled = false
+    timezoneForCoords(lat, lon).then((tz) => {
+      if (!cancelled) setSuggestedTz(tz)
+    })
+    return () => {
+      cancelled = true
+    }
   }, [manualLat, manualLon])
   const effectiveTz = tzEditedByUser ? manualTz : (suggestedTz ?? manualTz)
 
@@ -68,23 +88,23 @@ export function BirthField({ initial, onPlacePreview, onSubmit }: BirthFieldProp
   }, [manual, manualLat, manualLon])
 
   const placeReady = manual ? Number.isFinite(Number(manualLat)) && Number.isFinite(Number(manualLon)) && !!effectiveTz : !!selected
-  const dateReady = placeReady && date.length > 0
-  const timeReady = dateReady && time.length > 0
+  const dateReady = placeReady && parsedDate !== null
+  const timeReady = dateReady && parsedTime !== null
 
   function handleSubmit(e: FormEvent) {
     e.preventDefault()
-    if (!date || !time) return
+    if (!parsedDate || !parsedTime) return
 
     if (manual) {
       const lat = Number(manualLat)
       const lon = Number(manualLon)
       if (!Number.isFinite(lat) || !Number.isFinite(lon) || !effectiveTz) return
-      onSubmit({ date, time, lat, lon, tz: effectiveTz })
+      onSubmit({ date: parsedDate, time: parsedTime, lat, lon, tz: effectiveTz })
       return
     }
 
     if (!selected) return
-    onSubmit({ date, time, lat: selected.lat, lon: selected.lon, tz: selected.tz, place: selected.place })
+    onSubmit({ date: parsedDate, time: parsedTime, lat: selected.lat, lon: selected.lon, tz: selected.tz, place: selected.place })
   }
 
   return (
@@ -144,12 +164,21 @@ export function BirthField({ initial, onPlacePreview, onSubmit }: BirthFieldProp
 
       <div className={placeReady ? 'void-field live' : 'void-field'}>
         <div className="void-lab">DATE</div>
-        <input type="date" value={date} onChange={(e) => setDate(e.target.value)} disabled={!placeReady} />
+        <input
+          type="text"
+          inputMode="text"
+          value={dateText}
+          placeholder="19 Feb 1991"
+          onChange={(e) => setDateText(e.target.value)}
+          disabled={!placeReady}
+        />
+        {dateText.trim() !== '' && parsedDate === null && <div className="void-field-hint">Try "19 Feb 1991" or "1991-02-19".</div>}
       </div>
 
       <div className={dateReady ? 'void-field live' : 'void-field'}>
-        <div className="void-lab">TIME</div>
-        <input type="time" value={time} onChange={(e) => setTime(e.target.value)} disabled={!dateReady} />
+        <div className="void-lab">TIME (24H OR AM/PM)</div>
+        <input type="text" inputMode="text" value={timeText} placeholder="22:45" onChange={(e) => setTimeText(e.target.value)} disabled={!dateReady} />
+        {timeText.trim() !== '' && parsedTime === null && <div className="void-field-hint">Try "22:45" or "10:45 PM".</div>}
       </div>
 
       <button type="submit" className={timeReady ? 'void-go live' : 'void-go'} disabled={!timeReady}>

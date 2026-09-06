@@ -84,70 +84,56 @@ button {
   z-index: 1;
 }
 
-.void-globe-box svg.globe {
+.void-globe-box .globe {
   width: min(112vh, 112vw);
-  height: auto;
-  touch-action: none;
   transition: opacity 0.3s;
 }
 
 /* Reopening birth data "in place" — UX-SPEC §6: globe dimmed, lines up. */
-.void-globe-box.dimmed svg.globe {
+.void-globe-box.dimmed .globe {
   opacity: 0.35;
 }
 
-.void-sea {
-  fill: var(--void-sea);
+/* The globe artwork itself (sea/graticule/land/lines/heat/limb) is drawn on
+   the <canvas> in Globe.tsx's draw() — see lib/map/globe.ts and voidTokens()
+   there, which reads --void-sea etc. below via getComputedStyle. Labels and
+   the birth-place marker stay real DOM so they're clickable/accessible. */
+.void-labels-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
 }
-.void-land {
-  fill: var(--void-land);
-  stroke: var(--void-coast);
-  stroke-width: 0.45;
-}
-.void-grat {
-  stroke: var(--void-grat);
-  fill: none;
-}
-.void-limb {
-  stroke: var(--void-limb);
-  fill: none;
-}
-.void-line {
-  fill: none;
-  stroke-linecap: round;
-  stroke-width: 1.7;
-  opacity: 0.85;
-}
-.void-heat {
-  fill: none;
-  stroke-linecap: round;
-  stroke-width: 28;
-  opacity: 0.5;
-}
-.void-marker {
-  fill: var(--ink-hi);
+.void-marker-dom {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  margin: -4px 0 0 -4px;
+  border-radius: 50%;
+  background: var(--ink-hi);
   opacity: 0.9;
 }
-.void-labels text {
-  fill: #ede7ff;
+.void-label-dot {
+  position: absolute;
+  width: 9px;
+  height: 9px;
+  margin: -4.5px 0 0 -4.5px;
+  border-radius: 50%;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  pointer-events: auto;
+}
+.void-label-text {
+  position: absolute;
+  transform: translateY(-50%);
   font: 300 15px var(--voice);
+  color: #ede7ff;
   letter-spacing: 0.06em;
+  white-space: nowrap;
   cursor: pointer;
-}
-.void-label-group {
-  cursor: pointer;
-}
-
-/* Lines draw on over 1.6s, staggered — UX-SPEC §5. Each path sets
-   `--dash-bound` inline (a value comfortably longer than any rendered line
-   at this globe scale) as both dasharray and starting dashoffset. */
-@keyframes void-draw-on {
-  to {
-    stroke-dashoffset: 0;
-  }
-}
-.void-line.reveal {
-  animation: void-draw-on 1.6s cubic-bezier(0.3, 0.8, 0.35, 1) forwards;
+  pointer-events: auto;
+  padding: 4px 6px;
+  margin: 0;
 }
 
 .void-vign {
@@ -244,6 +230,12 @@ button {
 }
 .void-field input::placeholder {
   color: #39325a;
+}
+.void-field-hint {
+  font-family: var(--data);
+  font-size: 10.5px;
+  color: var(--ink-warn);
+  margin-top: 6px;
 }
 .void-manual-row {
   display: flex;

@@ -56,7 +56,7 @@ function App() {
   const [reopenBirth, setReopenBirth] = useState(false)
   const [scrubMinutes, setScrubMinutes] = useState(0)
 
-  const globeRef = useRef<SVGSVGElement>(null)
+  const globeRef = useRef<HTMLCanvasElement>(null)
 
   const { chart, error } = useMemo(() => computeChartResult(birth), [birth])
 
@@ -168,11 +168,11 @@ function App() {
   }
 
   async function handleShare() {
-    const svg = globeRef.current
-    if (!svg || !chart || !birth) return
+    const canvas = globeRef.current
+    if (!canvas || !chart || !birth) return
     const placeLabel = birth.place ?? `${birth.lat.toFixed(2)}, ${birth.lon.toFixed(2)}`
     const birthLine = `${birth.date} · ${birth.time} · ${birth.tz}`
-    const dataUrl = await exportGlobeShareImage(svg, { placeLabel, birthLine })
+    const dataUrl = await exportGlobeShareImage(canvas, { placeLabel, birthLine })
     setSheet({ kind: 'share', dataUrl })
   }
 
