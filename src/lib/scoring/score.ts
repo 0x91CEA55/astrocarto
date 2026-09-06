@@ -160,12 +160,6 @@ function compareCityScores(a: CityScore, b: CityScore): number {
   return b.score - a.score
 }
 
-/** How far down the sorted-by-score list to look for cluster members at all.
- * Bounds the O(topN x N) haversine scan and keeps a cluster's disclosed
- * members meaningful (candidates that were genuinely still in contention),
- * not literally every small town in the gazetteer within DEDUP_RADIUS_KM. */
-const CANDIDATE_SCAN_LIMIT = 200
-
 /** Cap on how many suppressed candidates one accepted city discloses. */
 const MAX_CLUSTER_MEMBERS = 8
 
@@ -177,15 +171,36 @@ const MAX_CLUSTER_MEMBERS = 8
  * own. Without this, the list is one region repeated — five towns near the
  * same strong paran — not a tour of the globe.
  *
+ * Scans the *entire* sorted list, not a truncated prefix. An earlier version
+ * capped this scan at 200 candidates as a premature optimization (haversine
+ * against up to `topN` accepted cities is cheap — tens of milliseconds for
+ * the full ~34k-city gazetteer, verified live). That cap was a real
+ * correctness bug, not just a performance one: when one region dominates
+ * the raw scores (a body-angle line crossing North America much closer than
+ * anywhere else, say), the next genuinely different region can rank well
+ * past 200 — verified at rank 257 for one real chart — so the scan silently
+ * never got there, and the list either under-filled or came back
+ * one-region-plus-a-token-outlier instead of a real tour of the line.
+ *
  * Separated from `rankCities` so this list-shaping logic is testable against
  * hand-built scores, without needing real astronomy to land on exact numbers.
  */
 export function applyRankingRules(scored: CityScore[], topN: number): CityScore[] {
-  const sorted = [...scored].sort(compareCityScores).slice(0, CANDIDATE_SCAN_LIMIT)
+  const sorted = [...scored].sort(compareCityScores)
+
+  // Latitude-only distance is a cheap lower bound on the true great-circle
+  // distance (adding a longitude difference can only lengthen it) — reject
+  // obviously-too-far candidates with a subtraction before paying for a full
+  // haversine call. Scanning the whole gazetteer (see above) makes this
+  // pre-filter worth having: most candidates are nowhere near any accepted
+  // city, and this turns that check from trig into arithmetic for them.
+  const maxLatDiffDeg = DEDUP_RADIUS_KM / 111.32
 
   const accepted: CityScore[] = []
   for (const candidate of sorted) {
-    const nearby = accepted.find((a) => haversineKm(a.city.lat, a.city.lon, candidate.city.lat, candidate.city.lon) < DEDUP_RADIUS_KM)
+    const nearby = accepted.find(
+      (a) => Math.abs(a.city.lat - candidate.city.lat) <= maxLatDiffDeg && haversineKm(a.city.lat, a.city.lon, candidate.city.lat, candidate.city.lon) < DEDUP_RADIUS_KM,
+    )
     if (nearby) {
       if (nearby.clusterMembers.length < MAX_CLUSTER_MEMBERS) nearby.clusterMembers.push(candidate)
       continue

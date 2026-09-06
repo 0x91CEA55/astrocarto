@@ -59,6 +59,33 @@ describe('applyRankingRules', () => {
     expect(out[0].clusterMembers.length).toBeLessThanOrEqual(8)
   })
 
+  it('reaches a genuinely different region far down the sorted list instead of under-filling topN', () => {
+    // Regression: an earlier version capped the scan at the first 200
+    // sorted-by-score candidates. When one region dominates raw scores (a
+    // line crossing it much closer than anywhere else), the next distinct
+    // region can rank arbitrarily far down -- verified at rank 257 for a
+    // real chart. 300 near-duplicate candidates from one region, all
+    // clustered together (so only one of them can ever be accepted),
+    // plus one genuinely distant city ranked last: the distant city must
+    // still be found and accepted as the 2nd result, not dropped.
+    const dominant = Array.from({ length: 300 }, (_, i) => scored(`Dominant${i}`, 40 + i * 0.001, -100 + i * 0.001, 1000, 100 - i * 0.01))
+    const distant = scored('FarAway', -30, 140, 1000, 1) // Australia-ish, ranks dead last
+    const out = applyRankingRules([...dominant, distant], 2)
+    expect(out).toHaveLength(2)
+    expect(out.map((c) => c.city.name)).toContain('FarAway')
+  })
+
+  it('a cheap latitude pre-filter does not change de-dup correctness (still catches a same-latitude-band nearby city, still misses a same-latitude-but-far-away one)', () => {
+    const input = [
+      scored('Base', 45, 0, 1000, 10),
+      scored('SameLatNearby', 45, 1, 1000, 9), // ~79km away at this latitude -- inside DEDUP_RADIUS_KM
+      scored('SameLatFar', 45, 100, 1000, 8), // same latitude, ~7800km away -- outside DEDUP_RADIUS_KM
+    ]
+    const out = applyRankingRules(input, 10)
+    expect(out.map((c) => c.city.name)).toEqual(['Base', 'SameLatFar'])
+    expect(out[0].clusterMembers.map((c) => c.city.name)).toEqual(['SameLatNearby'])
+  })
+
   it('skips a candidate within DEDUP_RADIUS_KM of an already-accepted city, even if it scores higher than something farther away', () => {
     // Two Siberian towns ~60km apart (both within the radius of each other), one clear winner elsewhere.
     const input = [
