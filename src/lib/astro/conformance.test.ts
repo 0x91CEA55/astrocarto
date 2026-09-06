@@ -47,6 +47,15 @@ for (const goldenCase of golden) {
         expect(angleDiffDeg(p.ra, expected.ra)).toBeLessThan(RA_DEC_TOLERANCE_DEG)
         expect(angleDiffDeg(p.dec, expected.dec)).toBeLessThan(RA_DEC_TOLERANCE_DEG)
       })
+
+      // ENGINE-SPEC §7 / poc/README.md "known unsound": golden.json carries
+      // `retrograde` per body but this suite used to never assert it — that's
+      // how the old 0.5-day finite-difference detector survived 318 green
+      // tests while reading noise. Assert it now that detection is analytic.
+      it(`${bodyName}: retrograde flag matches the oracle`, () => {
+        const p = bodyPosition(bodyName, utcDate)
+        expect(p.retrograde).toBe(expected.retrograde)
+      })
     }
 
     for (const [key, byLat] of Object.entries(lines)) {

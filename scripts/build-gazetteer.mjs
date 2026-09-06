@@ -4,6 +4,11 @@
 //
 // Source: https://download.geonames.org/export/dump/cities15000.zip (CC-BY 4.0)
 // Refresh with: node scripts/build-gazetteer.mjs <path-to-cities15000.txt> public/data/cities.json
+//
+// geonameId is kept (not just discarded) so scripts/resolve-wikidata.mjs can
+// join against it afterwards without re-parsing the raw dump. Run that script
+// next to populate wikiTitle (see poc/UX-SPEC.md §7) — this script alone
+// leaves wikiTitle null for every row.
 
 import { readFileSync, writeFileSync } from 'node:fs'
 
@@ -19,7 +24,7 @@ const rows = []
 for (const line of raw.split('\n')) {
   if (!line) continue
   const cols = line.split('\t')
-  const [, name, asciiname, , lat, lon, , , countryCode, , , , , , population, , , timezone] = cols
+  const [geonameId, name, asciiname, , lat, lon, , , countryCode, , , , , , population, , , timezone] = cols
   rows.push([
     name,
     asciiname !== name ? asciiname : null,
@@ -28,6 +33,8 @@ for (const line of raw.split('\n')) {
     countryCode,
     Number(population) || 0,
     timezone,
+    Number(geonameId),
+    null, // wikiTitle -- populated by scripts/resolve-wikidata.mjs
   ])
 }
 

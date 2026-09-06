@@ -17,7 +17,34 @@ export const ANGLES = ['AC', 'DC', 'MC', 'IC'] as const
 
 export type AngleName = (typeof ANGLES)[number]
 
+export const SIGN_NAMES = [
+  'Aries',
+  'Taurus',
+  'Gemini',
+  'Cancer',
+  'Leo',
+  'Virgo',
+  'Libra',
+  'Scorpio',
+  'Sagittarius',
+  'Capricorn',
+  'Aquarius',
+  'Pisces',
+] as const
+
+export type SignName = (typeof SIGN_NAMES)[number]
+
 export type Dignity = 'domicile' | 'exalted' | 'detriment' | 'fall' | 'peregrine'
+
+export type AspectType = 'conjunction' | 'sextile' | 'square' | 'trine' | 'opposition'
+
+export interface Aspect {
+  a: BodyName
+  b: BodyName
+  type: AspectType
+  separationDeg: number
+  orbDeg: number
+}
 
 export interface BodyPosition {
   ra: number // degrees, apparent geocentric, equator of date

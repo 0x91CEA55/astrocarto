@@ -6,9 +6,18 @@ export interface City {
   countryCode: string
   population: number
   tz: string
+  geonameId: number
+  /**
+   * English Wikipedia article title, resolved at build time via Wikidata
+   * (see scripts/resolve-wikidata.mjs and poc/UX-SPEC.md §7) — an exact
+   * lookup key for `src/lib/wiki/summary.ts`, never a name to fuzzy-match at
+   * runtime. Null for the ~42% of gazetteer rows with no resolvable article
+   * (small towns commonly have none — that's expected, not an error).
+   */
+  wikiTitle: string | null
 }
 
-type CityTuple = [string, string | null, number, number, string, number, string]
+type CityTuple = [string, string | null, number, number, string, number, string, number, string | null]
 
 let citiesPromise: Promise<City[]> | null = null
 
@@ -18,7 +27,7 @@ export function loadCities(): Promise<City[]> {
     .then((res) => res.json() as Promise<CityTuple[]>)
     .then((rows) =>
       rows.map(
-        ([name, ascii, lat, lon, countryCode, population, tz]): City => ({
+        ([name, ascii, lat, lon, countryCode, population, tz, geonameId, wikiTitle]): City => ({
           name,
           ascii,
           lat,
@@ -26,6 +35,8 @@ export function loadCities(): Promise<City[]> {
           countryCode,
           population,
           tz,
+          geonameId,
+          wikiTitle,
         }),
       ),
     )

@@ -1,244 +1,592 @@
-main {
-  max-width: 1040px;
-  margin: 0 auto;
-  padding: 24px 20px 60px;
+/* Void design tokens — UX-SPEC §3. Values copied verbatim from the spec's
+   token table (this app is dark-only for v1; light mode is explicitly out of
+   scope — UX-SPEC §15). */
+:root {
+  --void-bg: #020308;
+  --void-sea: #04050c;
+  --void-land: rgba(120, 110, 180, 0.07);
+  --void-coast: rgba(150, 140, 215, 0.15);
+  --void-grat: rgba(140, 130, 200, 0.055);
+  --void-limb: rgba(170, 155, 235, 0.16);
+
+  --ink-hi: #f6f2ff;
+  --ink-mid: #b9b3d4;
+  --ink-lo: #8f87b4;
+  --ink-faint: #6f678f;
+  --ink-warn: #f0c244;
+
+  --voice: Optima, Candara, 'Palatino Linotype', Palatino, serif;
+  --data: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  --accent: #e8628f;
+
+  color-scheme: dark;
 }
 
-header h1 {
-  margin: 0 0 4px;
-  font-size: 1.8rem;
-  letter-spacing: 0.02em;
+* {
+  box-sizing: border-box;
 }
 
-.tagline {
-  margin: 0 0 24px;
-  color: #9aa3b8;
-  max-width: 60ch;
+html,
+body {
+  height: 100%;
+  background: var(--void-bg);
+  color: var(--ink-mid);
+  font-family: var(--voice);
 }
 
-.birth-form {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  background: #161923;
-  border: 1px solid #232838;
-  border-radius: 10px;
-  padding: 16px;
+body {
+  margin: 0;
+  overflow: hidden;
+  /* This is a drag-the-globe interface, not a document — without this, a
+     drag that starts over a label's <text> triggers the browser's native
+     text-selection alongside the rotation (found via a live Playwright drag
+     test: a blue selection highlight appeared over the labels mid-drag). */
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+button,
+input {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+}
+
+button {
+  cursor: pointer;
+}
+
+:focus-visible {
+  outline: 2px solid var(--ink-hi);
+  outline-offset: 3px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+}
+
+/* ── root / globe ── */
+.void-root {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+}
+
+.void-globe-box {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  z-index: 1;
+}
+
+.void-globe-box svg.globe {
+  width: min(112vh, 112vw);
+  height: auto;
+  touch-action: none;
+  transition: opacity 0.3s;
+}
+
+/* Reopening birth data "in place" — UX-SPEC §6: globe dimmed, lines up. */
+.void-globe-box.dimmed svg.globe {
+  opacity: 0.35;
+}
+
+.void-sea {
+  fill: var(--void-sea);
+}
+.void-land {
+  fill: var(--void-land);
+  stroke: var(--void-coast);
+  stroke-width: 0.45;
+}
+.void-grat {
+  stroke: var(--void-grat);
+  fill: none;
+}
+.void-limb {
+  stroke: var(--void-limb);
+  fill: none;
+}
+.void-line {
+  fill: none;
+  stroke-linecap: round;
+  stroke-width: 1.7;
+  opacity: 0.85;
+}
+.void-heat {
+  fill: none;
+  stroke-linecap: round;
+  stroke-width: 28;
+  opacity: 0.5;
+}
+.void-marker {
+  fill: var(--ink-hi);
+  opacity: 0.9;
+}
+.void-labels text {
+  fill: #ede7ff;
+  font: 300 15px var(--voice);
+  letter-spacing: 0.06em;
+  cursor: pointer;
+}
+.void-label-group {
+  cursor: pointer;
+}
+
+/* Lines draw on over 1.6s, staggered — UX-SPEC §5. Each path sets
+   `--dash-bound` inline (a value comfortably longer than any rendered line
+   at this globe scale) as both dasharray and starting dashoffset. */
+@keyframes void-draw-on {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+.void-line.reveal {
+  animation: void-draw-on 1.6s cubic-bezier(0.3, 0.8, 0.35, 1) forwards;
+}
+
+.void-vign {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background: radial-gradient(58% 52% at 50% 50%, rgba(2, 3, 8, 0) 40%, rgba(2, 3, 8, 0.55) 100%);
+}
+.void-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  background: linear-gradient(
+    180deg,
+    var(--void-bg) 0%,
+    rgba(2, 3, 8, 0.92) 14%,
+    rgba(2, 3, 8, 0) 32%,
+    rgba(2, 3, 8, 0) 60%,
+    rgba(2, 3, 8, 0.92) 85%,
+    var(--void-bg) 100%
+  );
+}
+
+/* ── shared overlay layer ──
+   CRITICAL: the layer and any full-bleed child stay pointer-events:none so
+   drags reach the globe underneath. Only genuinely interactive leaves opt
+   back in — see poc/reference/README.md's "interaction bugs" list. Getting
+   this wrong looks like nothing happened, not like a failure. */
+.void-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 5;
+  pointer-events: none;
+  display: grid;
+}
+.void-layer .void-entry,
+.void-layer #field button,
+.void-layer #field .void-summary,
+.void-layer #field .void-lead b,
+.void-layer .void-suggest button,
+.void-layer input,
+.void-layer .void-reopen {
+  pointer-events: auto;
+}
+
+/* ── ENTRY: birth input ── */
+.void-entry {
+  place-self: center;
+  width: min(90vw, 430px);
+  text-align: center;
+  text-shadow:
+    0 2px 40px var(--void-bg),
+    0 2px 14px var(--void-bg);
+}
+.void-entry h1 {
+  font: 300 clamp(26px, 4.6vw, 40px) / 1.1 var(--voice);
+  color: var(--ink-hi);
+  margin: 0 0 6px;
+}
+.void-sub {
+  font: 300 15px/1.55 var(--voice);
+  color: var(--ink-lo);
+  margin: 0 0 32px;
+}
+.void-field {
   margin-bottom: 20px;
+  opacity: 0.28;
+  transition: opacity 0.45s;
   position: relative;
 }
-
-.field-row {
-  display: flex;
-  gap: 16px;
-  flex-wrap: wrap;
-  position: relative;
+.void-field.live {
+  opacity: 1;
 }
-
-.birth-form label {
+.void-lab {
+  font-family: var(--data);
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  color: var(--ink-faint);
+  margin-bottom: 6px;
+}
+.void-field input {
+  width: 100%;
+  text-align: center;
+  font: 300 24px/1.3 var(--voice);
+  color: var(--ink-hi);
+  border-bottom: 1px solid #241e38;
+  padding: 5px 0;
+  transition: border-color 0.3s;
+}
+.void-field input:focus {
+  border-bottom-color: #6a5c9e;
+}
+.void-field input::placeholder {
+  color: #39325a;
+}
+.void-manual-row {
   display: flex;
-  flex-direction: column;
-  gap: 4px;
-  font-size: 0.85rem;
-  color: #b7bfd2;
+  gap: 14px;
+}
+.void-manual-row > div {
   flex: 1;
-  min-width: 160px;
 }
-
-.birth-form input {
-  background: #0f1117;
-  border: 1px solid #3a4152;
-  border-radius: 6px;
-  padding: 8px 10px;
-  color: #e6e9f0;
-  font-size: 0.95rem;
+.void-go {
+  margin-top: 10px;
+  font: 300 17px/1 var(--voice);
+  color: var(--ink-hi);
+  letter-spacing: 0.03em;
+  border: 1px solid #3a3158;
+  border-radius: 999px;
+  padding: 12px 30px;
+  opacity: 0.25;
+  transition:
+    opacity 0.4s,
+    background 0.25s;
+  pointer-events: none;
 }
-
-.birth-form input:focus {
-  outline: 2px solid #7fd4ff;
-  outline-offset: 1px;
+.void-go.live {
+  opacity: 1;
+  pointer-events: auto;
 }
-
-.city-search {
-  position: relative;
+.void-go.live:hover {
+  background: rgba(140, 120, 220, 0.16);
 }
-
-.autocomplete {
+.void-link {
+  display: block;
+  margin: 16px auto 0;
+  font-size: 13px;
+  color: var(--ink-lo);
+  text-decoration: underline;
+}
+.void-suggest {
   position: absolute;
-  top: 100%;
   left: 0;
   right: 0;
-  z-index: 10;
-  list-style: none;
-  margin: 4px 0 0;
-  padding: 4px;
-  background: #1b2030;
-  border: 1px solid #3a4152;
-  border-radius: 8px;
-  max-height: 220px;
-  overflow-y: auto;
-}
-
-.autocomplete li button {
-  width: 100%;
+  margin-top: 2px;
+  background: #0a0a16;
+  border: 1px solid #221c36;
   text-align: left;
-  background: none;
-  border: none;
-  color: #e6e9f0;
-  padding: 8px 10px;
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 0.9rem;
+  z-index: 9;
 }
-
-.autocomplete li button:hover {
-  background: #232838;
-}
-
-.link-button {
-  align-self: flex-start;
-  background: none;
-  border: none;
-  color: #7fd4ff;
-  font-size: 0.85rem;
-  cursor: pointer;
-  padding: 0;
-}
-
-button.primary {
-  align-self: flex-start;
-  background: #ff5fa2;
-  color: #0f1117;
-  border: none;
-  border-radius: 6px;
-  padding: 10px 20px;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.error {
-  color: #ff7a5c;
-}
-
-.legend {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  margin-bottom: 12px;
-}
-
-.legend-item {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 0.82rem;
-  color: #b7bfd2;
-}
-
-.map-container {
-  background: #0f1117;
-  border: 1px solid #232838;
-  border-radius: 10px;
-  overflow: hidden;
-  margin-bottom: 20px;
-}
-
-.map-container svg {
+.void-suggest button {
   display: block;
   width: 100%;
-  height: auto;
+  padding: 9px 14px;
+  font: 300 16px/1 var(--voice);
+  color: var(--ink-mid);
+}
+.void-suggest button:hover {
+  background: rgba(140, 120, 220, 0.14);
+  color: var(--ink-hi);
 }
 
-.sphere {
-  fill: #0b0d12;
-  stroke: #3a4152;
-  stroke-width: 1;
+.void-reopen {
+  place-self: center;
+  align-self: center;
+  justify-self: center;
 }
 
-.graticule {
-  fill: none;
-  stroke: #232838;
-  stroke-width: 0.5;
+/* ── FIELD ── */
+#field {
+  display: none;
+  grid-template-rows: auto 1fr auto;
+  height: 100%;
+  opacity: 0;
+  transition: opacity 0.5s;
 }
-
-.country {
-  fill: #1b2030;
-  stroke: #2c3242;
-  stroke-width: 0.5;
+.stage-field #field {
+  display: grid;
 }
-
-.theme-panel {
-  background: #161923;
-  border: 1px solid #232838;
-  border-radius: 10px;
-  padding: 16px;
+#field.on {
+  opacity: 1;
 }
-
-.theme-buttons {
-  display: flex;
-  gap: 10px;
-  align-items: center;
-  margin-bottom: 12px;
+.void-headline {
+  align-self: end;
+  text-align: center;
+  padding: 0 24px;
+  text-shadow:
+    0 2px 40px var(--void-bg),
+    0 2px 14px var(--void-bg);
+  grid-row: 2;
 }
-
-.theme-button {
-  background: #0f1117;
-  border: 1px solid #3a4152;
-  color: #e6e9f0;
-  border-radius: 6px;
-  padding: 8px 16px;
+.void-ttl {
+  font: 300 clamp(28px, 5vw, 54px) / 1.04 var(--voice);
+  color: var(--ink-hi);
+  letter-spacing: -0.015em;
+}
+.void-lead {
+  font: 300 16px/1.6 var(--voice);
+  color: var(--ink-lo);
+  max-width: 42ch;
+  margin: 14px auto 0;
+}
+.void-lead b {
+  font-weight: 400;
+  color: var(--ink-mid);
+  border-bottom: 1px dotted #5b4f86;
   cursor: pointer;
 }
-
-.theme-button.active {
-  background: #ff5fa2;
-  border-color: #ff5fa2;
-  color: #0f1117;
-  font-weight: 600;
-}
-
-.heat-toggle {
-  margin-left: auto;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 0.85rem;
-  color: #b7bfd2;
-}
-
-.city-list {
-  list-style: decimal;
-  padding-left: 20px;
-  margin: 0;
+.void-bottom {
+  grid-row: 3;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  align-items: center;
+  gap: 14px;
+  padding-bottom: 48px;
 }
-
-.city-list-row {
+.void-themes {
   display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  font-weight: 600;
+  gap: 4px;
+}
+.void-themes button {
+  font: 300 15px/1 var(--voice);
+  color: var(--ink-faint);
+  letter-spacing: 0.05em;
+  padding: 7px 15px;
+}
+.void-themes button[aria-pressed='true'] {
+  color: var(--ink-hi);
+}
+.void-summary {
+  font-family: var(--data);
+  font-size: 11.5px;
+  color: var(--ink-faint);
+  letter-spacing: 0.04em;
+  border-bottom: 1px dotted #2e2748;
+  padding-bottom: 2px;
+}
+.void-summary:hover {
+  color: var(--ink-lo);
 }
 
-.city-score {
-  color: #7fd4ff;
-  font-variant-numeric: tabular-nums;
+.void-precision,
+.void-share {
+  position: fixed;
+  bottom: 22px;
+  z-index: 6;
+  font-family: var(--data);
+  font-size: 10.5px;
+  letter-spacing: 0.13em;
+  color: var(--ink-faint);
+}
+.void-precision {
+  left: 22px;
+}
+.void-share {
+  right: 22px;
+}
+.void-precision:hover,
+.void-share:hover {
+  color: var(--ink-mid);
 }
 
-.city-interpretation {
-  margin: 4px 0 0;
-  color: #b7bfd2;
-  font-size: 0.88rem;
+.void-error {
+  position: fixed;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 30;
+  color: var(--ink-warn);
+  font-family: var(--data);
+  font-size: 12px;
 }
 
-footer {
-  margin-top: 32px;
-  color: #6b7385;
-  font-size: 0.8rem;
+/* ── sheet ── */
+.void-sheet-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  pointer-events: none;
+}
+.void-sheet {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 20;
+  max-height: 62vh;
+  overflow: auto;
+  transform: translateY(103%);
+  transition: transform 0.32s cubic-bezier(0.2, 0.8, 0.3, 1);
+  background: linear-gradient(180deg, rgba(2, 3, 8, 0) 0%, rgba(2, 3, 8, 0.93) 9%, var(--void-bg) 26%);
+  padding: 52px 26px 30px;
+  pointer-events: none;
+}
+.void-sheet.on {
+  transform: translateY(0);
+  pointer-events: auto;
+}
+.void-sheet-inner {
+  max-width: 660px;
+  margin: 0 auto;
+}
+.void-sheet-close {
+  position: absolute;
+  top: 34px;
+  right: 26px;
+  font-family: var(--data);
+  font-size: 11px;
+  color: var(--ink-faint);
+}
+.void-sheet h2 {
+  font: 300 34px/1.06 var(--voice);
+  color: var(--ink-hi);
+  margin: 0 0 3px;
+}
+.void-cc {
+  font-family: var(--data);
+  font-size: 11px;
+  color: var(--ink-faint);
+  letter-spacing: 0.12em;
+  margin-bottom: 16px;
+}
+.void-duo {
+  position: relative;
+  width: 100%;
+  height: 168px;
+  overflow: hidden;
+  margin-bottom: 16px;
+  background: #0b0a18;
+}
+.void-duo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  filter: grayscale(1) contrast(1.15) brightness(0.62);
+}
+.void-duo-tint {
+  position: absolute;
+  inset: 0;
+  mix-blend-mode: color;
+  opacity: 0.85;
+}
+.void-duo-fade {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(2, 3, 8, 0.1), rgba(2, 3, 8, 0.75));
+}
+.void-duo.empty {
+  height: 1px;
+  margin-bottom: 8px;
+  background: #1a1630;
+}
+.void-extract {
+  font: 300 16px/1.62 var(--voice);
+  color: var(--ink-mid);
+  max-width: 60ch;
+}
+.void-faint {
+  color: var(--ink-faint);
+}
+.void-attrib {
+  font-family: var(--data);
+  font-size: 10px;
+  color: var(--ink-faint);
+  margin-top: 9px;
+}
+.void-attrib a {
+  color: var(--ink-lo);
+}
+.void-near {
+  margin-top: 22px;
+  border-top: 1px solid #191430;
+  padding-top: 14px;
+}
+.void-k {
+  font-family: var(--data);
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  color: var(--ink-faint);
+  margin-bottom: 9px;
+}
+.void-nr {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  font-family: var(--data);
+  font-size: 12.5px;
+  padding: 4px 0;
+}
+.void-nr i {
+  width: 14px;
+  height: 2px;
+  border-radius: 2px;
+  flex: 0 0 auto;
+}
+.void-nm {
+  flex: 1;
+  color: var(--ink-mid);
+}
+.void-km {
+  color: var(--ink-lo);
+}
+.void-warn {
+  color: var(--ink-warn);
+}
+.void-ro {
+  columns: 2;
+  column-gap: 26px;
+  font-family: var(--data);
+  font-size: 11.5px;
+  line-height: 1.95;
+  color: var(--ink-lo);
+}
+.void-ro div {
+  display: flex;
+  gap: 8px;
+}
+.void-ro .void-b {
+  flex: 0 0 60px;
+  color: var(--ink-mid);
+}
+.void-prov {
+  font-family: var(--data);
+  font-size: 10px;
+  color: var(--ink-faint);
+  margin-top: 16px;
+  border-top: 1px solid #191430;
+  padding-top: 10px;
+  letter-spacing: 0.06em;
 }
 
-footer a {
-  color: #7fd4ff;
+@media (max-width: 760px) {
+  .void-sheet {
+    padding: 44px 18px 26px;
+    max-height: 70vh;
+  }
+  .void-ttl {
+    font-size: 30px;
+  }
+  /* At narrow widths the centered summary line runs edge to edge and would
+     otherwise sit under the fixed corner controls — found via a live
+     Playwright run at 380x780 (UX-SPEC §12's own required test width). */
+  .void-summary {
+    max-width: calc(100vw - 160px);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    display: inline-block;
+  }
 }

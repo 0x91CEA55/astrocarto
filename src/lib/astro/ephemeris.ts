@@ -15,19 +15,30 @@ const ENGINE_BODY: Record<BodyName, Astronomy.Body> = {
   Pluto: Astronomy.Body.Pluto,
 }
 
-/** Apparent geocentric ecliptic-of-date longitude, in degrees [0, 360). */
-function eclipticLongitudeOfDate(body: Astronomy.Body, date: Date): number {
-  const geoVec = Astronomy.GeoVector(body, date, true)
-  return Astronomy.Ecliptic(geoVec).elon
-}
-
-const RETROGRADE_HALF_STEP_DAYS = 0.5
-
-function isRetrograde(body: Astronomy.Body, date: Date, eclLon: number): boolean {
-  const before = eclipticLongitudeOfDate(body, new Date(date.getTime() - RETROGRADE_HALF_STEP_DAYS * 86_400_000))
-  // wrap180-style signed delta so the 0/360 seam never looks like a direction flip
-  const delta = ((eclLon - before + 180) % 360 + 360) % 360 - 180
-  return delta < 0
+/**
+ * Retrograde via the analytic ecliptic-longitude rate, not a finite difference.
+ * A 0.5-day central difference is *below the ephemeris's own error bound* for
+ * every outer body (e.g. Jupiter moves ~0.000244° over that window against a
+ * ±1 arcmin ≈ 0.0167° bound) — it reads noise, not motion. Instead take the
+ * geocentric state vector (position + velocity), rotate it into the ecliptic
+ * plane, and read the sign of dλ/dt = (x·vy − y·vx) / (x² + y²) directly —
+ * exact, no step size to tune.
+ */
+function isRetrograde(body: Astronomy.Body, date: Date): boolean {
+  const helioBody = Astronomy.HelioState(body, date)
+  const helioEarth = Astronomy.HelioState(Astronomy.Body.Earth, date)
+  const geoEqj = new Astronomy.StateVector(
+    helioBody.x - helioEarth.x,
+    helioBody.y - helioEarth.y,
+    helioBody.z - helioEarth.z,
+    helioBody.vx - helioEarth.vx,
+    helioBody.vy - helioEarth.vy,
+    helioBody.vz - helioEarth.vz,
+    helioBody.t,
+  )
+  const { x, y, vx, vy } = Astronomy.RotateState(Astronomy.Rotation_EQJ_ECL(), geoEqj)
+  const eclLonRateDeg = (x * vy - y * vx) / (x * x + y * y)
+  return eclLonRateDeg < 0
 }
 
 /**
@@ -49,7 +60,7 @@ export function bodyPosition(name: BodyName, date: Date): BodyPosition {
     ra: equatorial.ra * 15, // hours -> degrees
     dec: equatorial.dec,
     eclLon,
-    retrograde: isRetrograde(body, date, eclLon),
+    retrograde: isRetrograde(body, date),
     dignity: dignityOf(name, eclLon),
   }
 }
