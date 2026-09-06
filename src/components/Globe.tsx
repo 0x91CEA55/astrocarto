@@ -356,9 +356,15 @@ export const Globe = forwardRef<HTMLCanvasElement, GlobeProps>(function Globe(
     }
     dg.moved = true
     setBusy(true)
+    // A fixed deg/px rotates a *screen-space* distance that scales with the
+    // projection's effective radius (size/2.5 * zoom) — at zoom 18 the same
+    // finger movement that pans gently at zoom 1 sweeps ~18x more screen
+    // distance. Dividing by zoom cancels that out so drag feels the same
+    // regardless of how zoomed in the cluster view is.
+    const dragRate = DRAG_DEG_PER_PX / zoomRef.current
     setRotation({
-      lambda: dg.lambda + (e.clientX - dg.x) * DRAG_DEG_PER_PX,
-      phi: clampPitch(dg.phi + (e.clientY - dg.y) * DRAG_DEG_PER_PX),
+      lambda: dg.lambda + (e.clientX - dg.x) * dragRate,
+      phi: clampPitch(dg.phi + (e.clientY - dg.y) * dragRate),
     })
   }
 

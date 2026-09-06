@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { createGlobeProjection, dodgeLabels, easeCubicInOut, flyToTarget, isVisible, LABEL_MIN_GAP_PX } from './globe'
+import { applyRotation, createGlobeProjection, dodgeLabels, DRAG_DEG_PER_PX, easeCubicInOut, flyToTarget, isVisible, LABEL_MIN_GAP_PX, type Rotation } from './globe'
 
 describe('createGlobeProjection', () => {
   it('defaults to zoom 1', () => {
@@ -12,6 +12,60 @@ describe('createGlobeProjection', () => {
     const base = createGlobeProjection(620, 1).scale()
     expect(createGlobeProjection(620, 4).scale()).toBeCloseTo(base * 4, 6)
     expect(createGlobeProjection(620, 0.5).scale()).toBeCloseTo(base * 0.5, 6)
+  })
+})
+
+describe('drag rate vs zoom (Globe.tsx: dragRate = DRAG_DEG_PER_PX / zoom)', () => {
+  /** Screen-space shift of the point currently under the view's center,
+   * after rotating by `dragPx` px worth of drag at the given zoom — the
+   * same computation Globe.tsx's handlePointerMove performs per frame. */
+  function centerPointShift(zoom: number, dragPx: number): number {
+    const size = 620
+    const rotation: Rotation = { lambda: 100, phi: -16 }
+    const centerLonLat: [number, number] = [-rotation.lambda, rotation.phi]
+    const dragRate = DRAG_DEG_PER_PX / zoom
+
+    const before = createGlobeProjection(size, zoom)
+    applyRotation(before, rotation)
+    const p0 = before(centerLonLat)!
+
+    const after = createGlobeProjection(size, zoom)
+    applyRotation(after, { lambda: rotation.lambda + dragPx * dragRate, phi: rotation.phi })
+    const p1 = after(centerLonLat)!
+
+    return Math.hypot(p1[0] - p0[0], p1[1] - p0[1])
+  }
+
+  it('produces the same screen-space content shift regardless of zoom, for a realistic per-frame drag delta', () => {
+    // Real drags compose many small mousemove deltas (a handful of px each),
+    // not one large jump — this is the regime that has to feel consistent.
+    for (const dragPx of [1, 5, 20]) {
+      const atZoom1 = centerPointShift(1, dragPx)
+      const atZoom6 = centerPointShift(6, dragPx)
+      const atZoom18 = centerPointShift(18, dragPx)
+      expect(atZoom6).toBeCloseTo(atZoom1, 0)
+      expect(atZoom18).toBeCloseTo(atZoom1, 0)
+    }
+  })
+
+  it('without the 1/zoom correction, the same drag would sweep far more screen distance at high zoom', () => {
+    // Documents the bug this fix addresses: dividing by zoom is not optional.
+    const size = 620
+    const rotation: Rotation = { lambda: 100, phi: -16 }
+    const centerLonLat: [number, number] = [-rotation.lambda, rotation.phi]
+    const dragPx = 5
+
+    function uncorrectedShift(zoom: number): number {
+      const before = createGlobeProjection(size, zoom)
+      applyRotation(before, rotation)
+      const p0 = before(centerLonLat)!
+      const after = createGlobeProjection(size, zoom)
+      applyRotation(after, { lambda: rotation.lambda + dragPx * DRAG_DEG_PER_PX, phi: rotation.phi }) // no /zoom
+      const p1 = after(centerLonLat)!
+      return Math.hypot(p1[0] - p0[0], p1[1] - p0[1])
+    }
+
+    expect(uncorrectedShift(18) / uncorrectedShift(1)).toBeGreaterThan(15) // ~18x, the reported bug
   })
 })
 
