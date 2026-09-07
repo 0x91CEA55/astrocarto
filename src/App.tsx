@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import './App.css'
 import { BirthField } from './components/BirthField'
 import { Globe, type GlobeFocus, type GlobeLabel } from './components/Globe'
+import { sphericalCentroid } from './lib/map/globe'
 import { DerivationSheet, PlaceSheet, PrecisionSheet } from './components/SheetContent'
 import { Sheet } from './components/Sheet'
 import { TimeScrubber } from './components/TimeScrubber'
@@ -98,13 +99,29 @@ function App() {
   const fieldCopy = useMemo(() => (chart ? buildFieldCopy(theme, chart, topScore) : null), [chart, theme, topScore])
   const accentColor = BODY_COLOR[THEME_ACCENT_BODY[theme]]
 
+  // A city's dot/label is colored by ITS OWN best-contributing line, not a
+  // uniform theme accent — a city whose score actually comes from Jupiter's
+  // line (e.g. bestKey "Jupiter-DC") drawn in Love's Venus-pink accent looks
+  // like it's "on" the Venus line when it visually sits on Jupiter's line
+  // instead. Verified live (reported: "pink dots on unrelated love lines"):
+  // Kelo and Voronezh's bestKey was Jupiter-DC, yet both rendered pink
+  // (Love's Venus accent) while sitting on the visibly orange Jupiter line.
+  const lineBodyColor = useCallback(
+    (key: string | null): string => {
+      if (!key) return accentColor
+      const body = key.split('-')[0] as BodyName
+      return BODY_COLOR[body] ?? accentColor
+    },
+    [accentColor],
+  )
+
   const labels: GlobeLabel[] = useMemo(
-    () => topCities.slice(0, 4).map((c) => ({ id: String(c.city.geonameId), lat: c.city.lat, lon: c.city.lon, name: c.city.name })),
-    [topCities],
+    () => topCities.slice(0, 4).map((c) => ({ id: String(c.city.geonameId), lat: c.city.lat, lon: c.city.lon, name: c.city.name, color: lineBodyColor(c.bestKey) })),
+    [topCities, lineBodyColor],
   )
   const clusterLabels: GlobeLabel[] = useMemo(
-    () => clusterScatter.map((c) => ({ id: String(c.city.geonameId), lat: c.city.lat, lon: c.city.lon, name: c.city.name })),
-    [clusterScatter],
+    () => clusterScatter.map((c) => ({ id: String(c.city.geonameId), lat: c.city.lat, lon: c.city.lon, name: c.city.name, color: lineBodyColor(c.bestKey) })),
+    [clusterScatter, lineBodyColor],
   )
 
   // Reveal choreography — UX-SPEC §5. Computation is ~50ms; the 3.2s gap is
@@ -155,8 +172,15 @@ function App() {
     if (stage === 'entry') return previewMarker ? { lat: previewMarker.lat, lon: previewMarker.lon, ms: 850 } : null
     if (stage === 'cluster' && clusterCenter) return { lat: clusterCenter.city.lat, lon: clusterCenter.city.lon, zoom: CLUSTER_ZOOM, ms: 900, exact: true }
     if (!canFlyToTop || !topScore) return null
-    return { lat: topScore.city.lat, lon: topScore.city.lon, zoom: 1, ms: 900 }
-  }, [stage, previewMarker, canFlyToTop, topScore, clusterCenter])
+    // Fly to the spherical centroid of the visible labels, not literally the
+    // #1 result — with genuinely diverse, multi-continent results (the point
+    // of the region-diversity feature), centering on #1 specifically often
+    // left only 1-2 of the top 4 on the visible hemisphere at once, needing
+    // a manual rotation to see the rest. Reported live: "such minimal
+    // zoomed out results?"
+    const center = labels.length > 0 ? sphericalCentroid(labels) : topScore.city
+    return { lat: center.lat, lon: center.lon, zoom: 1, ms: 900 }
+  }, [stage, previewMarker, canFlyToTop, topScore, clusterCenter, labels])
 
   const handlePlacePreview = useCallback((lat: number, lon: number) => {
     setPreviewMarker({ lat, lon })

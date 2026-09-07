@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { applyRotation, createGlobeProjection, dodgeLabels, DRAG_DEG_PER_PX, easeCubicInOut, flyToTarget, isVisible, LABEL_MIN_GAP_PX, type Rotation } from './globe'
+import { applyRotation, createGlobeProjection, dodgeLabels, DRAG_DEG_PER_PX, easeCubicInOut, flyToTarget, isVisible, LABEL_MIN_GAP_PX, sphericalCentroid, type Rotation } from './globe'
 
 describe('createGlobeProjection', () => {
   it('defaults to zoom 1', () => {
@@ -66,6 +66,46 @@ describe('drag rate vs zoom (Globe.tsx: dragRate = DRAG_DEG_PER_PX / zoom)', () 
     }
 
     expect(uncorrectedShift(18) / uncorrectedShift(1)).toBeGreaterThan(15) // ~18x, the reported bug
+  })
+})
+
+describe('sphericalCentroid', () => {
+  it('a single point is its own centroid', () => {
+    const { lat, lon } = sphericalCentroid([{ lat: 40, lon: -75 }])
+    expect(lat).toBeCloseTo(40, 6)
+    expect(lon).toBeCloseTo(-75, 6)
+  })
+
+  it('two nearby points average to roughly their midpoint', () => {
+    const { lat, lon } = sphericalCentroid([
+      { lat: 10, lon: 20 },
+      { lat: 10, lon: 24 },
+    ])
+    expect(lat).toBeCloseTo(10, 0)
+    expect(lon).toBeCloseTo(22, 0)
+  })
+
+  it('handles the antimeridian correctly instead of collapsing to the wrong side of the globe', () => {
+    // Plain (lat+lat)/2, (lon+lon)/2 averaging of 179 and -179 gives lon 0 --
+    // the exact opposite side of the globe from where these two points
+    // actually are (both near +/-180). The vector-mean approach must not
+    // make this mistake.
+    const { lon } = sphericalCentroid([
+      { lat: 0, lon: 179 },
+      { lat: 0, lon: -179 },
+    ])
+    expect(Math.abs(lon)).toBeGreaterThan(170) // near +/-180, not near 0
+  })
+
+  it('does not throw on a perfectly symmetric, mutually-cancelling set of points', () => {
+    const result = sphericalCentroid([
+      { lat: 0, lon: 0 },
+      { lat: 0, lon: 90 },
+      { lat: 0, lon: 180 },
+      { lat: 0, lon: -90 },
+    ])
+    expect(Number.isFinite(result.lat)).toBe(true)
+    expect(Number.isFinite(result.lon)).toBe(true)
   })
 })
 

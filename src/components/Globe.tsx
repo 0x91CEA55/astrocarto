@@ -45,6 +45,8 @@ export interface GlobeLabel {
   lat: number
   lon: number
   name: string
+  /** Dot/leader-line color — the city's own best-contributing line's body color, not a uniform theme accent (falls back to `accentColor` when omitted). */
+  color?: string
 }
 
 export interface GlobeFocus {
@@ -245,7 +247,7 @@ export const Globe = forwardRef<HTMLCanvasElement, GlobeProps>(function Globe(
       ctx.beginPath()
       ctx.moveTo(l.x + 5, l.y)
       ctx.lineTo(l.x + 12, l.labelY - 4)
-      ctx.strokeStyle = accentColor
+      ctx.strokeStyle = labelByIdColor.get(l.id) ?? accentColor
       ctx.lineWidth = 0.8
       ctx.globalAlpha = 0.55
       ctx.stroke()
@@ -399,6 +401,7 @@ export const Globe = forwardRef<HTMLCanvasElement, GlobeProps>(function Globe(
   }, [labels, rotation, projection, maxLabels, size])
 
   const labelByIdName = useMemo(() => new Map(labels.map((l) => [l.id, l.name])), [labels])
+  const labelByIdColor = useMemo(() => new Map(labels.map((l) => [l.id, l.color])), [labels])
 
   const markerPoint = marker && isVisible(marker.lat, marker.lon, rotation) ? projection([marker.lon, marker.lat]) : null
 
@@ -423,7 +426,7 @@ export const Globe = forwardRef<HTMLCanvasElement, GlobeProps>(function Globe(
             key={l.id}
             type="button"
             className="void-label-dot"
-            style={{ left: `${(l.x / size) * 100}%`, top: `${(l.y / size) * 100}%`, background: accentColor }}
+            style={{ left: `${(l.x / size) * 100}%`, top: `${(l.y / size) * 100}%`, background: labelByIdColor.get(l.id) ?? accentColor }}
             onClick={() => onLabelClick?.(l.id)}
             aria-label={labelByIdName.get(l.id)}
           />

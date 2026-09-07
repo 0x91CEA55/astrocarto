@@ -56,6 +56,40 @@ export function flyToTarget(from: Rotation, targetLat: number, targetLon: number
   return { lambda: from.lambda + delta, phi: exact ? targetLat : targetLat * 0.6 }
 }
 
+/**
+ * Spherical (vector) mean of a set of lat/lon points — the point whose
+ * direction best represents the group as a whole, used to fly the camera
+ * somewhere that shows as much of the top results as possible instead of
+ * literally centering on the #1 result and leaving the others on the far
+ * side of the globe. Reported live: with genuinely diverse, multi-continent
+ * results (the point of the region-diversity feature), centering on #1
+ * specifically often left only 1-2 of the top 4 visible without manually
+ * rotating — "such minimal zoomed out results?"
+ *
+ * Plain lat/lon averaging breaks down near the antimeridian and poles (e.g.
+ * two points at lon ±179° average to lon 0°, the wrong side of the globe) —
+ * averaging as 3D unit vectors and converting back avoids that.
+ */
+export function sphericalCentroid(points: Array<{ lat: number; lon: number }>): { lat: number; lon: number } {
+  let x = 0
+  let y = 0
+  let z = 0
+  for (const p of points) {
+    const latRad = (p.lat * Math.PI) / 180
+    const lonRad = (p.lon * Math.PI) / 180
+    x += Math.cos(latRad) * Math.cos(lonRad)
+    y += Math.cos(latRad) * Math.sin(lonRad)
+    z += Math.sin(latRad)
+  }
+  const n = points.length
+  x /= n
+  y /= n
+  z /= n
+  const lon = Math.atan2(y, x) * (180 / Math.PI)
+  const lat = Math.atan2(z, Math.sqrt(x * x + y * y)) * (180 / Math.PI)
+  return { lat, lon }
+}
+
 export function clampPitch(phi: number): number {
   return Math.max(-PITCH_CLAMP_DEG, Math.min(PITCH_CLAMP_DEG, phi))
 }
