@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { applyRankingRules, DEDUP_RADIUS_KM, MAX_PER_REGION, NEAR_TIE_RATIO, nearbyScored, REGION_RADIUS_KM, scorePointAttributed, type CityScore, type Theme, type WeightsConfig } from './score'
+import { applyRankingRules, DEDUP_RADIUS_KM, MAX_PER_REGION, NEAR_TIE_RATIO, nearbyScored, scorePointAttributed, type CityScore, type Theme, type WeightsConfig } from './score'
+import { macroRegion } from './continents'
 import { BODY_NAMES, type Positions } from '../astro/types'
 import type { City } from '../gazetteer/cities'
 
@@ -22,12 +23,12 @@ function weightsWith(theme: Theme, weights: WeightsConfig['themes'][Theme]): Wei
 }
 
 let nextGeonameId = 1
-function city(name: string, lat: number, lon: number, population: number): City {
-  return { name, ascii: null, lat, lon, countryCode: 'XX', population, tz: 'UTC', geonameId: nextGeonameId++, wikiTitle: null }
+function city(name: string, lat: number, lon: number, population: number, countryCode = 'XX'): City {
+  return { name, ascii: null, lat, lon, countryCode, population, tz: 'UTC', geonameId: nextGeonameId++, wikiTitle: null }
 }
 
-function scored(name: string, lat: number, lon: number, population: number, score: number): CityScore {
-  return { city: city(name, lat, lon, population), score, bestKey: null, bestMagnitude: 0, secondKey: null, secondMagnitude: 0, clusterMembers: [] }
+function scored(name: string, lat: number, lon: number, population: number, score: number, countryCode = 'XX'): CityScore {
+  return { city: city(name, lat, lon, population, countryCode), score, bestKey: null, bestMagnitude: 0, secondKey: null, secondMagnitude: 0, clusterMembers: [] }
 }
 
 describe('applyRankingRules', () => {
@@ -76,24 +77,23 @@ describe('applyRankingRules', () => {
   })
 
   it('reserves list slots for a genuinely different region instead of letting one continent-scale swath fill every slot (reported live: an all-East-Asia Love result with zero North America)', () => {
-    // 8 candidates ~334km apart (so none are DEDUP_RADIUS_KM near-duplicates
-    // of each other) but all within ~2335km of each other (so all one
-    // REGION_RADIUS_KM macro-region), scored strictly descending -- plus two
-    // other single-candidate regions, each far from A and from each other,
-    // scoring lower than every A. MAX_PER_REGION=3 caps region A at exactly
-    // 3, and with topN=5 there are exactly enough real alternatives
-    // (3 + 1 + 1 = 5) to fill the list without backfilling into region A
-    // beyond its quota -- so unlike the backfill test below, the cap must
-    // actually hold here, not just avoid under-filling.
+    // 8 China candidates, well outside DEDUP_RADIUS_KM of each other (so none
+    // fold into clusterMembers), scored strictly descending -- plus two
+    // other single-candidate regions (US, Brazil), each scoring lower than
+    // every China entry. MAX_PER_REGION=3 caps China at exactly 3, and with
+    // topN=5 there are exactly enough real alternatives (3 + 1 + 1 = 5) to
+    // fill the list without backfilling into China beyond its quota -- so
+    // unlike the backfill test below, the cap must actually hold here, not
+    // just avoid under-filling.
     //
     // This also regression-tests the original live bug directly: the cap is
     // a *fixed count*, not a fraction of topN. A share-based cap (e.g. 40%
     // of 10 = 4) satisfies itself entirely within the globe's 4 visible
     // labels and never changes what's actually on screen -- verified live
     // before this was a fixed constant.
-    const regionA = Array.from({ length: 8 }, (_, i) => scored(`A${i}`, i * 3, 0, 1000, 10 - i))
-    const distant1 = scored('Distant1', 0, 180, 1000, 2)
-    const distant2 = scored('Distant2', -60, -90, 1000, 1)
+    const regionA = Array.from({ length: 8 }, (_, i) => scored(`A${i}`, i * 3, 0, 1000, 10 - i, 'CN'))
+    const distant1 = scored('Distant1', 0, -95, 1000, 2, 'US')
+    const distant2 = scored('Distant2', -15, -55, 1000, 1, 'BR')
     const out = applyRankingRules([...regionA, distant1, distant2], 5)
 
     expect(out.map((c) => c.city.name)).toEqual(expect.arrayContaining(['Distant1', 'Distant2']))
@@ -101,34 +101,69 @@ describe('applyRankingRules', () => {
     expect(fromRegionA.length).toBeLessThanOrEqual(MAX_PER_REGION)
   })
 
-  it('groups a region transitively across a bridging member, instead of undercounting a candidate that only touches part of the group directly (the real Jinan/Changsha/Kuantan-via-bridge bug)', () => {
-    // Chain of 3, each ~3336km / ~6672km from the next, along one meridian:
-    // ChainA(lat 0) -- 3336km -- ChainB(lat 30) -- 3336km -- ChainC(lat 60).
-    // ChainA-to-ChainC is ~6672km: OUTSIDE REGION_RADIUS_KM (5000) on its own,
-    // but the three still form one group because ChainB bridges them
-    // (single-linkage, not "near every member"). That group reaches
-    // MAX_PER_REGION=3 from ChainA/B/C alone.
-    //
-    // ChainD (lat 85) sits ~2780km from ChainC (near) but ~9452km from
-    // ChainA and ~6116km from ChainB (both far) -- i.e. it only touches ONE
-    // member of the group directly. A pairwise-count implementation (count
-    // how many *already-accepted individual cities* are within radius of the
-    // candidate) sees just 1 match (ChainC) and wrongly admits it under a
-    // cap of 3. The real bug this documents: a fourth same-swath city
-    // (Baicheng) slipped past a cap of 3 exactly this way, by being far from
-    // one specific already-accepted member of its own swath (Kuantan) while
-    // still obviously part of it. Group-total accounting must see ChainD as
-    // touching a group already at size 3 and defer it -- leaving room for
-    // Distant, a real alternative from elsewhere, to fill the last slot.
-    const chainA = scored('ChainA', 0, 0, 1000, 10)
-    const chainB = scored('ChainB', 30, 0, 1000, 9)
-    const chainC = scored('ChainC', 60, 0, 1000, 8)
-    const chainD = scored('ChainD', 85, 0, 1000, 7)
-    const distant = scored('Distant', -40, 170, 1000, 6)
+  it('classifies region by country code, not by great-circle proximity to other candidates', () => {
+    // Regression for a real, serious bug found this session: an earlier
+    // version grouped candidates dynamically by distance (transitive/
+    // single-linkage, ~5000km radius) so one continent-spanning curve's
+    // extremes wouldn't be miscounted as separate regions. At world scale
+    // that has a fatal flaw -- verified empirically, all ~1000 de-duped
+    // candidates for a real chart (China to Argentina to Ghana to Canada)
+    // chained into ONE single-linkage group, since islands/coastlines bridge
+    // every landmass within a few-thousand-km hop. That silently made the
+    // region cap a no-op. A country-code classification can't chain: here,
+    // four intermediate "bridge-like" candidates (Russia and Canada,
+    // progressively closer to North America) sit between an Asia candidate
+    // and a North America candidate, each only ~2000km from its neighbor --
+    // exactly the shape that caused old-style chaining -- yet Asia and North
+    // America must still land in different, independently-capped regions
+    // regardless of how densely the intermediate points fill in the gap.
+    const asia = scored('AsiaCity', 30, 100, 1000, 10, 'CN')
+    const bridge1 = scored('Bridge1', 55, 90, 1000, 9, 'RU')
+    const bridge2 = scored('Bridge2', 60, 60, 1000, 8, 'RU')
+    const bridge3 = scored('Bridge3', 62, 20, 1000, 7, 'RU')
+    const bridge4 = scored('Bridge4', 64, -20, 1000, 6, 'CA')
+    const na = scored('NACity', 45, -100, 1000, 5, 'US')
 
-    const out = applyRankingRules([chainA, chainB, chainC, chainD, distant], 4)
+    const out = applyRankingRules([asia, bridge1, bridge2, bridge3, bridge4, na], 6)
+    expect(out.map((c) => c.city.name)).toHaveLength(6) // nothing lost — just verifying it ran
+    expect(macroRegion('CN')).toBe('Asia')
+    expect(macroRegion('US')).toBe('North America')
+    expect(macroRegion('CN')).not.toBe(macroRegion('US'))
+  })
 
-    expect(out.map((c) => c.city.name)).toEqual(['ChainA', 'ChainB', 'ChainC', 'Distant'])
+  it("splits Russia at the Urals (~60°E) instead of one blanket label, so a Far-East Siberian city doesn't masquerade as a different region from the China it actually sits alongside", () => {
+    // Regression: verified live, a real chart's top 10 put two Amur Oblast
+    // (Russian Far East) cities right alongside two China cities -- the same
+    // East Asian swath a line crosses, ~2000km apart. Without the split, a
+    // blanket "Russia = Europe" label would let those Amur cities count as
+    // a distinct macro-region, letting one swath dominate the list under
+    // the guise of "diversity" -- exactly the bug this whole feature exists
+    // to prevent.
+    expect(macroRegion('RU', 30)).toBe('Europe') // west of the Urals (e.g. Moscow)
+    expect(macroRegion('RU', 100)).toBe('Asia') // east of the Urals (e.g. Amur Oblast)
+    expect(macroRegion('RU')).toBe('Europe') // no lon given: stable fallback, doesn't throw
+  })
+
+  it('distributes topN round-robin across regions instead of letting the single best-scoring region claim its full quota before any other region gets a slot (reported live: "I see Fort McMurray for that example, but there are many options in NA that are just skipped")', () => {
+    // Two regions (China, US), each with 3 members. Region A (China)
+    // outscores region B (US) throughout. A pure score-order fill (accept
+    // in descending score, defer once a region hits its cap) would take all
+    // 3 of A before B gets even one, once cap allows it -- exactly the
+    // complaint this fixes. Round-robin instead alternates: A's best, B's
+    // best, A's 2nd, B's 2nd, ... so both are represented well before either
+    // reaches its cap.
+    const a0 = scored('A0', 0, 0, 1000, 10, 'CN')
+    const a1 = scored('A1', 30, 0, 1000, 9, 'CN')
+    const a2 = scored('A2', 60, 0, 1000, 8, 'CN')
+    const b0 = scored('B0', 0, 90, 1000, 7, 'US')
+    const b1 = scored('B1', 30, 90, 1000, 6, 'US')
+    const b2 = scored('B2', 60, 90, 1000, 5, 'US')
+
+    const out = applyRankingRules([a0, a1, a2, b0, b1, b2], 4)
+    const names = out.map((c) => c.city.name)
+
+    expect(names.filter((n) => n.startsWith('A'))).toHaveLength(2)
+    expect(names.filter((n) => n.startsWith('B'))).toHaveLength(2)
   })
 
   it('backfills from the capped region when no other region has any viable candidate, rather than under-filling topN', () => {
@@ -139,8 +174,7 @@ describe('applyRankingRules', () => {
     expect(out).toHaveLength(8)
   })
 
-  it('REGION_RADIUS_KM and MAX_PER_REGION are the documented tunable values', () => {
-    expect(REGION_RADIUS_KM).toBe(5000)
+  it('MAX_PER_REGION is the documented tunable value', () => {
     expect(MAX_PER_REGION).toBe(3)
   })
 
