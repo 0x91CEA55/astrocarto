@@ -164,23 +164,58 @@ function compareCityScores(a: CityScore, b: CityScore): number {
 const MAX_CLUSTER_MEMBERS = 8
 
 /**
+ * Roughly continental scale. Distinct from DEDUP_RADIUS_KM (300km, "the same
+ * place") — this is "the same broad swath of the world." A body-angle curve
+ * can hug one continent much more closely than any other for a given chart
+ * (verified: a Venus-DC curve whose ten closest, mutually-300km-plus-apart
+ * crossings were all somewhere in China/Vietnam/Malaysia, nothing else
+ * anywhere on Earth scoring competitively) — DEDUP_RADIUS_KM alone doesn't
+ * stop that, since none of those ten were near-duplicates of each other.
+ */
+export const REGION_RADIUS_KM = 5000
+
+/**
+ * At most this many results from one macro-region, when a genuinely
+ * different region has any viable candidate at all. A fixed count, not a
+ * fraction of topN — the globe only ever shows the first 4 as labels
+ * (LABEL_MAX_COUNT), so a share-of-10 cap (e.g. 40% => 4) can satisfy itself
+ * entirely within positions 1-4 and never change what's actually visible.
+ * Verified live: exactly this happened before this was a fixed count —
+ * positions 5-10 gained real diversity, the labels on the globe didn't
+ * change at all. Tune here.
+ */
+export const MAX_PER_REGION = 3
+
+/**
  * Sorts already-scored cities (score, with a population tiebreak on near-ties
- * — see NEAR_TIE_RATIO), then greedily takes the top N subject to spatial
- * de-duplication: a candidate within DEDUP_RADIUS_KM of an already-accepted
- * city is folded into that city's `clusterMembers` instead of shown on its
- * own. Without this, the list is one region repeated — five towns near the
- * same strong paran — not a tour of the globe.
+ * — see NEAR_TIE_RATIO), then greedily takes the top N subject to two
+ * separate diversity rules: spatial de-duplication (DEDUP_RADIUS_KM — a
+ * candidate near an already-accepted city is folded into its
+ * `clusterMembers` instead of shown on its own) and a macro-region quota
+ * (REGION_RADIUS_KM/MAX_PER_REGION — no single continental-scale swath can
+ * dominate the list while a real alternative exists elsewhere). Without the
+ * first, the list is five towns near the same strong paran; without the
+ * second, it can legitimately be ten distinct, properly-spaced cities that
+ * are still all on the same continent, when the line's geometry favors it —
+ * verified on a real chart (Love, Venus-DC): all ten top results were
+ * China/Vietnam/Malaysia, nothing else on Earth scored competitively, and
+ * every single one was >300km from the others, so de-dup alone had nothing
+ * to do.
+ *
+ * Region-capped candidates are deferred, not discarded, and backfilled by
+ * score if the quota leaves the list under `topN` — a genuinely
+ * single-region chart (or the water case) still returns a full list rather
+ * than an artificially short one for the sake of a diversity rule nothing
+ * else can satisfy.
  *
  * Scans the *entire* sorted list, not a truncated prefix. An earlier version
  * capped this scan at 200 candidates as a premature optimization (haversine
  * against up to `topN` accepted cities is cheap — tens of milliseconds for
  * the full ~34k-city gazetteer, verified live). That cap was a real
  * correctness bug, not just a performance one: when one region dominates
- * the raw scores (a body-angle line crossing North America much closer than
- * anywhere else, say), the next genuinely different region can rank well
- * past 200 — verified at rank 257 for one real chart — so the scan silently
- * never got there, and the list either under-filled or came back
- * one-region-plus-a-token-outlier instead of a real tour of the line.
+ * the raw scores, the next genuinely different region can rank well past
+ * 200 — verified at rank 257 for one real chart — so the scan silently
+ * never got there.
  *
  * Separated from `rankCities` so this list-shaping logic is testable against
  * hand-built scores, without needing real astronomy to land on exact numbers.
@@ -195,18 +230,83 @@ export function applyRankingRules(scored: CityScore[], topN: number): CityScore[
   // pre-filter worth having: most candidates are nowhere near any accepted
   // city, and this turns that check from trig into arithmetic for them.
   const maxLatDiffDeg = DEDUP_RADIUS_KM / 111.32
+  const maxRegionLatDiffDeg = REGION_RADIUS_KM / 111.32
+  const maxPerRegion = Math.min(topN, MAX_PER_REGION)
 
   const accepted: CityScore[] = []
-  for (const candidate of sorted) {
+  const regionDeferred: CityScore[] = []
+
+  function attachIfNearby(candidate: CityScore): boolean {
     const nearby = accepted.find(
       (a) => Math.abs(a.city.lat - candidate.city.lat) <= maxLatDiffDeg && haversineKm(a.city.lat, a.city.lon, candidate.city.lat, candidate.city.lon) < DEDUP_RADIUS_KM,
     )
-    if (nearby) {
-      if (nearby.clusterMembers.length < MAX_CLUSTER_MEMBERS) nearby.clusterMembers.push(candidate)
+    if (!nearby) return false
+    if (nearby.clusterMembers.length < MAX_CLUSTER_MEMBERS) nearby.clusterMembers.push(candidate)
+    return true
+  }
+
+  // Region membership is transitive (single-linkage), not "close enough to
+  // every existing member" — a real continent-spanning curve has extreme
+  // ends farther apart than any single radius (Kuantan-to-Baicheng, both on
+  // the same East Asian sweep, are 5019km apart), each still within
+  // REGION_RADIUS_KM of some *intermediate* member. Counting only direct
+  // pairwise hits let a 4th same-swath city slip past a cap of 3 by being
+  // just barely too far from one specific accepted member while still
+  // obviously part of the same swath — verified live twice, at two
+  // different radii, before switching to groups.
+  const regionGroups: CityScore[][] = []
+
+  function isNearGroup(candidate: CityScore, group: CityScore[]): boolean {
+    return group.some(
+      (a) => Math.abs(a.city.lat - candidate.city.lat) <= maxRegionLatDiffDeg && haversineKm(a.city.lat, a.city.lon, candidate.city.lat, candidate.city.lon) < REGION_RADIUS_KM,
+    )
+  }
+
+  function matchingGroupIndices(candidate: CityScore): number[] {
+    const matches: number[] = []
+    for (let i = 0; i < regionGroups.length; i++) {
+      if (isNearGroup(candidate, regionGroups[i])) matches.push(i)
+    }
+    return matches
+  }
+
+  /** Accepts the candidate and folds it into whichever region group(s) it touches, merging groups it bridges. */
+  function acceptIntoRegion(candidate: CityScore, matches: number[]): void {
+    if (matches.length === 0) {
+      regionGroups.push([candidate])
+    } else {
+      const [first, ...rest] = matches
+      for (const idx of [...rest].sort((a, b) => b - a)) {
+        regionGroups[first].push(...regionGroups[idx])
+        regionGroups.splice(idx, 1)
+      }
+      regionGroups[first].push(candidate)
+    }
+    accepted.push(candidate)
+  }
+
+  for (const candidate of sorted) {
+    if (attachIfNearby(candidate)) continue
+    if (accepted.length >= topN) continue
+
+    const matches = matchingGroupIndices(candidate)
+    const regionSize = matches.reduce((sum, i) => sum + regionGroups[i].length, 0)
+    if (regionSize >= maxPerRegion) {
+      regionDeferred.push(candidate)
       continue
     }
-    if (accepted.length < topN) accepted.push(candidate)
+    acceptIntoRegion(candidate, matches)
   }
+
+  // Backfill from the region-deferred pool, in score order, ignoring the
+  // region quota this time — only reached when no other region had enough
+  // real candidates to fill the list on its own.
+  for (const candidate of regionDeferred) {
+    if (accepted.length >= topN) break
+    if (attachIfNearby(candidate)) continue
+    acceptIntoRegion(candidate, matchingGroupIndices(candidate))
+  }
+
   return accepted
 }
 

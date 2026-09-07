@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { applyRankingRules, DEDUP_RADIUS_KM, NEAR_TIE_RATIO, nearbyScored, scorePointAttributed, type CityScore, type Theme, type WeightsConfig } from './score'
+import { applyRankingRules, DEDUP_RADIUS_KM, MAX_PER_REGION, NEAR_TIE_RATIO, nearbyScored, REGION_RADIUS_KM, scorePointAttributed, type CityScore, type Theme, type WeightsConfig } from './score'
 import { BODY_NAMES, type Positions } from '../astro/types'
 import type { City } from '../gazetteer/cities'
 
@@ -73,6 +73,75 @@ describe('applyRankingRules', () => {
     const out = applyRankingRules([...dominant, distant], 2)
     expect(out).toHaveLength(2)
     expect(out.map((c) => c.city.name)).toContain('FarAway')
+  })
+
+  it('reserves list slots for a genuinely different region instead of letting one continent-scale swath fill every slot (reported live: an all-East-Asia Love result with zero North America)', () => {
+    // 8 candidates ~334km apart (so none are DEDUP_RADIUS_KM near-duplicates
+    // of each other) but all within ~2335km of each other (so all one
+    // REGION_RADIUS_KM macro-region), scored strictly descending -- plus two
+    // other single-candidate regions, each far from A and from each other,
+    // scoring lower than every A. MAX_PER_REGION=3 caps region A at exactly
+    // 3, and with topN=5 there are exactly enough real alternatives
+    // (3 + 1 + 1 = 5) to fill the list without backfilling into region A
+    // beyond its quota -- so unlike the backfill test below, the cap must
+    // actually hold here, not just avoid under-filling.
+    //
+    // This also regression-tests the original live bug directly: the cap is
+    // a *fixed count*, not a fraction of topN. A share-based cap (e.g. 40%
+    // of 10 = 4) satisfies itself entirely within the globe's 4 visible
+    // labels and never changes what's actually on screen -- verified live
+    // before this was a fixed constant.
+    const regionA = Array.from({ length: 8 }, (_, i) => scored(`A${i}`, i * 3, 0, 1000, 10 - i))
+    const distant1 = scored('Distant1', 0, 180, 1000, 2)
+    const distant2 = scored('Distant2', -60, -90, 1000, 1)
+    const out = applyRankingRules([...regionA, distant1, distant2], 5)
+
+    expect(out.map((c) => c.city.name)).toEqual(expect.arrayContaining(['Distant1', 'Distant2']))
+    const fromRegionA = out.filter((c) => c.city.name.startsWith('A'))
+    expect(fromRegionA.length).toBeLessThanOrEqual(MAX_PER_REGION)
+  })
+
+  it('groups a region transitively across a bridging member, instead of undercounting a candidate that only touches part of the group directly (the real Jinan/Changsha/Kuantan-via-bridge bug)', () => {
+    // Chain of 3, each ~3336km / ~6672km from the next, along one meridian:
+    // ChainA(lat 0) -- 3336km -- ChainB(lat 30) -- 3336km -- ChainC(lat 60).
+    // ChainA-to-ChainC is ~6672km: OUTSIDE REGION_RADIUS_KM (5000) on its own,
+    // but the three still form one group because ChainB bridges them
+    // (single-linkage, not "near every member"). That group reaches
+    // MAX_PER_REGION=3 from ChainA/B/C alone.
+    //
+    // ChainD (lat 85) sits ~2780km from ChainC (near) but ~9452km from
+    // ChainA and ~6116km from ChainB (both far) -- i.e. it only touches ONE
+    // member of the group directly. A pairwise-count implementation (count
+    // how many *already-accepted individual cities* are within radius of the
+    // candidate) sees just 1 match (ChainC) and wrongly admits it under a
+    // cap of 3. The real bug this documents: a fourth same-swath city
+    // (Baicheng) slipped past a cap of 3 exactly this way, by being far from
+    // one specific already-accepted member of its own swath (Kuantan) while
+    // still obviously part of it. Group-total accounting must see ChainD as
+    // touching a group already at size 3 and defer it -- leaving room for
+    // Distant, a real alternative from elsewhere, to fill the last slot.
+    const chainA = scored('ChainA', 0, 0, 1000, 10)
+    const chainB = scored('ChainB', 30, 0, 1000, 9)
+    const chainC = scored('ChainC', 60, 0, 1000, 8)
+    const chainD = scored('ChainD', 85, 0, 1000, 7)
+    const distant = scored('Distant', -40, 170, 1000, 6)
+
+    const out = applyRankingRules([chainA, chainB, chainC, chainD, distant], 4)
+
+    expect(out.map((c) => c.city.name)).toEqual(['ChainA', 'ChainB', 'ChainC', 'Distant'])
+  })
+
+  it('backfills from the capped region when no other region has any viable candidate, rather than under-filling topN', () => {
+    // Same single region, but nothing else exists anywhere -- the quota
+    // must not cost results that have nowhere else to come from.
+    const regionA = Array.from({ length: 8 }, (_, i) => scored(`A${i}`, i * 3, 0, 1000, 10 - i))
+    const out = applyRankingRules(regionA, 8)
+    expect(out).toHaveLength(8)
+  })
+
+  it('REGION_RADIUS_KM and MAX_PER_REGION are the documented tunable values', () => {
+    expect(REGION_RADIUS_KM).toBe(5000)
+    expect(MAX_PER_REGION).toBe(3)
   })
 
   it('a cheap latitude pre-filter does not change de-dup correctness (still catches a same-latitude-band nearby city, still misses a same-latitude-but-far-away one)', () => {
